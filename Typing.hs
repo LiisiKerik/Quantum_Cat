@@ -78,7 +78,7 @@ module Typing where
     [Type_tree] ->
     [Int_tree] ->
     Either(String)(Type)
-  build_arr(_)(_)(type_con)(v)(w)([t])([n]) = flip(Arr)(rem_loc_int(n)) <$> type_transf(type_con)(v)(w)(t)
+  build_arr(_)(_)(type_con)(v)(w)([t])([n]) = type_transf(type_con)(v)(w)(t) >>= \t' -> Arr(t') <$> transf_int(w)(n)
   build_arr(l)(c)(_)(_)(_)(_)(_) = param_err("Arr")(l)(c)(1)(1)
   case_num_err :: Integer -> Integer -> Either(String)(t)
   case_num_err(l)(c) = Left("Matching error" ++ location'(l)(c) ++ ". Wrong number of cases.")
@@ -141,7 +141,7 @@ module Typing where
   create_type_constr' ::
     [(String, Type_constr)] -> [String] -> [String] -> [Type_tree] -> [Int_tree] -> Either(String)([Type], [Int_branch])
   create_type_constr'(c)(x)(y)(z)(w) = case z of
-    [] -> Right([], rem_loc_int <$> w)
+    [] -> ([], ) <$> transf_ints(y)(w)
     h : t -> type_transf(c)(x)(y)(h) >>= \h' -> first(h' :) <$> create_type_constr'(c)(x)(y)(t)(w)
   drepl ::
     [(String, Type_constr)] ->
@@ -156,17 +156,16 @@ module Typing where
     [String] ->
     Type' ->
     Either(String)(([Type], [Int_branch]), Type)
-  drepl(_)(l)(c)(n)(_)(_)([])(w)([])(w')(t) = first([], ) <$> drepl2(l)(c)(n)(w)(w')(t)
+  drepl(_)(l)(c)(n)(_)(y)([])(w)([])(w')(t) = first([], ) <$> drepl2(l)(c)(n)(y)(w)(w')(t)
   drepl(con)(l)(c)(n)(x)(y)(v : vs)(w)(v' : v's)(w')(t) = case type_transf(con)(x)(y)(v) of
     Left(e) -> Left(e)
     Right(v'') -> first(first(v'' :)) <$> drepl(con)(l)(c)(n)(x)(y)(vs)(w)(v's)(w')(repl3(v')(type''(v''))(t))
   drepl(_)(l)(c)(n)(_)(_)(_)(_)(_)(_)(_) = par_num_err(l)(c)(n)
-  drepl2 :: Integer -> Integer -> String -> [Int_tree] -> [String] -> Type' -> Either(String)([Int_branch], Type)
-  drepl2(_)(_)(_)([])([])(t) = Right([], type_back(t))
-  drepl2(l)(c)(n)(w : ws)(w' : w's)(t) = let
-    w'' = rem_loc_int(w) in
-      first(w'' :) <$> drepl2(l)(c)(n)(ws)(w's)(repl4(w')(int''(w''))(t))
-  drepl2(l)(c)(n)(_)(_)(_) = ipar_num_err(l)(c)(n)
+  drepl2 :: Integer -> Integer -> String -> [String] -> [Int_tree] -> [String] -> Type' -> Either(String)([Int_branch], Type)
+  drepl2(_)(_)(_)(_)([])([])(t) = Right([], type_back(t))
+  drepl2(l)(c)(n)(y)(w : ws)(w' : w's)(t) =
+    transf_int(y)(w) >>= \w'' -> first(w'' :) <$> drepl2(l)(c)(n)(y)(ws)(w's)(repl4(w')(int''(w''))(t))
+  drepl2(l)(c)(n)(_)(_)(_)(_) = ipar_num_err(l)(c)(n)
   dtype ::
     [(String, Location)] ->
     [(String, Type_constr)] ->
@@ -371,34 +370,17 @@ module Typing where
   rem_from_list(x)(y)(err) = case x of
     [] -> Left(err)
     z : w -> if z == y then Right(w) else (z :) <$> rem_from_list(w)(y)(err)
-  rem_loc_int :: Int_tree -> Int_branch
-  rem_loc_int(Int_tree(_)(_)(x)) = x
-  repl ::
-    [(String, Type_constr)] ->
-    Integer ->
-    Integer ->
-    String ->
-    [String] ->
-    [String] ->
-    [Type_tree] ->
-    [Int_tree] ->
-    Type ->
-    [String] ->
-    [String] ->
-    Type' ->
-    Either(String)([Type], [Int_branch])
-  repl(_)(l)(c)(n)(_)(_)([])(w)(t)([])(w')(t') = ([], ) <$> repl2(l)(c)(n)(w)(t)(w')(t')
+  repl(_)(l)(c)(n)(_)(y)([])(w)(t)([])(w')(t') = ([], ) <$> repl2(l)(c)(n)(y)(w)(t)(w')(t')
   repl(con)(l)(c)(n)(x)(y)(v : vs)(w)(t)(v' : v's)(w')(t') =
     type_transf(con)(x)(y)(v) >>=
     \v'' -> first(v'' :) <$> repl(con)(l)(c)(n)(x)(y)(vs)(w)(t)(v's)(w')(repl3(v')(type''(v''))(t'))
   repl(_)(l)(c)(n)(_)(_)(_)(_)(_)(_)(_)(_) = par_num_err(l)(c)(n)
   repl2 ::
-    Integer -> Integer -> String -> [Int_tree] -> Type -> [String] -> Type' -> Either(String)([Int_branch])
-  repl2(l)(c)(_)([])(t)([])(t') = if cmp(t)(t') then Right([]) else mism_err(l)(c)
-  repl2(l)(c)(n)(w : ws)(t)(w' : w's)(t') = let
-    w'' = rem_loc_int(w) in
-      (w'' :) <$> repl2(l)(c)(n)(ws)(t)(w's)(repl4(w')(int''(w''))(t'))
-  repl2(l)(c)(n)(_)(_)(_)(_) = ipar_num_err(l)(c)(n)
+    Integer -> Integer -> String -> [String] -> [Int_tree] -> Type -> [String] -> Type' -> Either(String)([Int_branch])
+  repl2(l)(c)(_)(_)([])(t)([])(t') = if cmp(t)(t') then Right([]) else mism_err(l)(c)
+  repl2(l)(c)(n)(y)(w : ws)(t)(w' : w's)(t') =
+    transf_int(y)(w) >>= \w'' -> (w'' :) <$> repl2(l)(c)(n)(y)(ws)(t)(w's)(repl4(w')(int''(w''))(t'))
+  repl2(l)(c)(n)(_)(_)(_)(_)(_) = ipar_num_err(l)(c)(n)
   repl3 :: String -> Type' -> Type' -> Type'
   repl3(x)(t)(Arr'(u)(n)) = Arr'(repl3(x)(t)(u))(n)
   repl3(x)(t)(Function_type_3(u)(v)) = Function_type_3(repl3(x)(t)(u))(repl3(x)(t)(v))
@@ -411,6 +393,17 @@ module Typing where
   repl5 :: String -> Int'' -> Int'' -> Int''
   repl5(x)(y)(z @ (Int_int(w))) = if w == x then y else z
   repl5(_)(_)(z) = z
+  transf_int :: [String] -> Int_tree -> Either(String)(Int_branch)
+  transf_int(x)(Int_tree(l)(c)(y)) = let
+    r = Right(y) in
+      case y of
+        Int_constant{} -> r
+        Int_variable(z) ->
+          if elem(z)(x) then r else Left("Typing error. Unknown integer type variable " ++ z ++ location'(l)(c) ++ ".")
+  transf_ints :: [String] -> [Int_tree] -> Either(String)([Int_branch])
+  transf_ints(x)(y) = case y of
+    [] -> Right([])
+    z : w -> transf_int(x)(z) >>= \a -> (a :) <$> transf_ints(x)(w)
   type' :: Type -> Type'
   type'(Arr(x)(y)) = Arr'(type'(x))(int'(y))
   type'(Cbit) = Cbit'
