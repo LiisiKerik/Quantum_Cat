@@ -17,7 +17,7 @@ module Typing where
     Lift''(Type)(Int_branch) |
     Map''(Type)(Type)(Int_branch) |
     Match''(Expression_tree'')([Match_case'']) |
-    Mes'' |
+    Mes''(Int_branch) |
     Name''(String)([Type])([Int_branch]) |
     Single_qbit_def(String) |
     Str''([Expression_tree'']) |
@@ -29,7 +29,7 @@ module Typing where
   data Match_case'' = Match_case''(String)([String])(Expression_tree'') deriving(Show)
   data Type =
     Arr(Type)(Int_branch) |
-    Cbit |
+    Creg(Int_branch) |
     Function_type''(Type)(Type) |
     Int_type |
     Qbit |
@@ -38,7 +38,7 @@ module Typing where
       deriving(Eq, Show)
   data Type' =
     Arr'(Type')(Int'') |
-    Cbit' |
+    Creg'(Int'') |
     External(String) |
     Function_type_3(Type')(Type') |
     Int' |
@@ -56,6 +56,8 @@ module Typing where
       [Type_tree] ->
       [Int_tree] ->
       Either(String)(Type))
+  instance Show Type_constr where
+    show(_) = "Type_constr FUNCTION"
   data Typevars = Global([String])([String]) | Local deriving(Show)
   add_to_res :: [(String, Location)] -> String -> Integer -> Integer -> Either(String)([(String, Location)])
   add_to_res(r)(x)(l)(c) = case r of
@@ -80,11 +82,22 @@ module Typing where
     Either(String)(Type)
   build_arr(_)(_)(type_con)(v)(w)([t])([n]) = type_transf(type_con)(v)(w)(t) >>= \t' -> Arr(t') <$> transf_int(w)(n)
   build_arr(l)(c)(_)(_)(_)(_)(_) = param_err("Arr")(l)(c)(1)(1)
+  build_creg ::
+    Integer ->
+    Integer ->
+    [(String, Type_constr)] ->
+    [String] ->
+    [String] ->
+    [Type_tree] ->
+    [Int_tree] ->
+    Either(String)(Type)
+  build_creg(_)(_)(_)(_)(w)([])([n]) = Creg <$> transf_int(w)(n)
+  build_creg(l)(c)(_)(_)(_)(_)(_) = param_err("Creg")(l)(c)(1)(1)
   case_num_err :: Integer -> Integer -> Either(String)(t)
   case_num_err(l)(c) = Left("Matching error" ++ location'(l)(c) ++ ". Wrong number of cases.")
   cmp :: Type -> Type' -> Bool
   cmp(Arr(t)(m))(Arr'(u)(n)) = cmp(t)(u) && cmp_int(m)(n)
-  cmp(Cbit)(Cbit') = True
+  cmp(Creg(m))(Creg'(n)) = cmp_int(m)(n)
   cmp(Function_type''(t)(u))(Function_type_3(v)(w)) = cmp(t)(v) && cmp(u)(w)
   cmp(Int_type)(Int') = True
   cmp(Qbit)(Qbit') = True
@@ -289,7 +302,12 @@ module Typing where
             Function_type''(Typevar("U"))(Typevar("V")))(
             Function_type''(Arr(Typevar("U"))(Int_variable("n")))(Arr(Typevar("V"))(Int_variable("n")))),
           Map''(Typevar("U"))(Typevar("V"))(Int_variable("n"))),
-        ("Measure", [], [], Function_type''(Qbit)(Cbit), Mes''),
+        (
+          "Measure",
+          [],
+          ["n"],
+          Function_type''(Arr(Qbit)(Int_variable("n")))(Creg(Int_variable("n"))),
+          Mes''(Int_variable("n"))),
         ("Take", [], [], Qbit, Take'')] ++
       (
         (\(x, y) -> (x, [], [], Function_type''(Qbit)(Qbit), Single_qbit_def(y))) <$>
@@ -370,6 +388,19 @@ module Typing where
   rem_from_list(x)(y)(err) = case x of
     [] -> Left(err)
     z : w -> if z == y then Right(w) else (z :) <$> rem_from_list(w)(y)(err)
+  repl ::
+    [(String, Type_constr)] ->
+    Integer ->
+    Integer -> String ->
+    [String] ->
+    [String] ->
+    [Type_tree] ->
+    [Int_tree] ->
+    Type ->
+    [String] ->
+    [String] ->
+    Type' ->
+    Either(String)([Type], [Int_branch])
   repl(_)(l)(c)(n)(_)(y)([])(w)(t)([])(w')(t') = ([], ) <$> repl2(l)(c)(n)(y)(w)(t)(w')(t')
   repl(con)(l)(c)(n)(x)(y)(v : vs)(w)(t)(v' : v's)(w')(t') =
     type_transf(con)(x)(y)(v) >>=
@@ -382,14 +413,24 @@ module Typing where
     transf_int(y)(w) >>= \w'' -> (w'' :) <$> repl2(l)(c)(n)(y)(ws)(t)(w's)(repl4(w')(int''(w''))(t'))
   repl2(l)(c)(n)(_)(_)(_)(_)(_) = ipar_num_err(l)(c)(n)
   repl3 :: String -> Type' -> Type' -> Type'
-  repl3(x)(t)(Arr'(u)(n)) = Arr'(repl3(x)(t)(u))(n)
-  repl3(x)(t)(Function_type_3(u)(v)) = Function_type_3(repl3(x)(t)(u))(repl3(x)(t)(v))
-  repl3(x)(t)(u @ (Typevar'(y))) = if y == x then t else u
-  repl3(_)(_)(t) = t
+  repl3(x)(t)(u) = let
+    f = repl3(x)(t) in
+      case u of
+        Arr'(v)(n) -> Arr'(f(v))(n)
+        Function_type_3(v)(w) -> Function_type_3(f(v))(f(w))
+        Struct_type'(y)(v)(n)(a) -> Struct_type'(y)(f <$> v)(n)(a)
+        Typevar'(y) -> if y == x then t else u
+        _ -> u
   repl4 :: String -> Int'' -> Type' -> Type'
-  repl4(x)(m)(Arr'(t)(n)) = Arr'(repl4(x)(m)(t))(repl5(x)(m)(n))
-  repl4(x)(n)(Function_type_3(t)(u)) = Function_type_3(repl4(x)(n)(t))(repl4(x)(n)(u))
-  repl4(_)(_)(t) = t
+  repl4(x)(n)(t) = let
+    f = repl4(x)(n)
+    g = repl5(x)(n) in
+      case t of
+        Arr'(u)(m) -> Arr'(f(u))(g(m))
+        Creg'(m) -> Creg'(g(m))
+        Function_type_3(u)(v) -> Function_type_3(f(u))(f(v))
+        Struct_type'(y)(u)(m)(a) -> Struct_type'(y)(f <$> u)(g <$> m)(a)
+        _ -> t
   repl5 :: String -> Int'' -> Int'' -> Int''
   repl5(x)(y)(z @ (Int_int(w))) = if w == x then y else z
   repl5(_)(_)(z) = z
@@ -406,7 +447,7 @@ module Typing where
     z : w -> transf_int(x)(z) >>= \a -> (a :) <$> transf_ints(x)(w)
   type' :: Type -> Type'
   type'(Arr(x)(y)) = Arr'(type'(x))(int'(y))
-  type'(Cbit) = Cbit'
+  type'(Creg(n)) = Creg'(int'(n))
   type'(Function_type''(x)(y)) = Function_type_3(type'(x))(type'(y))
   type'(Int_type) = Int'
   type'(Qbit) = Qbit'
@@ -414,7 +455,7 @@ module Typing where
   type'(Typevar(x)) = Typevar'(x)
   type'' :: Type -> Type'
   type''(Arr(x)(y)) = Arr'(type''(x))(int''(y))
-  type''(Cbit) = Cbit'
+  type''(Creg(n)) = Creg'(int''(n))
   type''(Function_type''(x)(y)) = Function_type_3(type''(x))(type''(y))
   type''(Int_type) = Int'
   type''(Qbit) = Qbit'
@@ -470,7 +511,7 @@ module Typing where
     h : t -> type_transf(c)(v)(w)(h) >>= \ty -> (ty :) <$> type_alg_fields(c)(i + 1)(st)(v)(w)(t)
   type_back :: Type' -> Type
   type_back(Arr'(t)(m)) = Arr(type_back(t))(int_back(m))
-  type_back(Cbit') = Cbit
+  type_back(Creg'(n)) = Creg(int_back(n))
   type_back(Function_type_3(t)(u)) = Function_type''(type_back(t))(type_back(u))
   type_back(Int') = Int_type
   type_back(Qbit') = Qbit
@@ -693,7 +734,8 @@ module Typing where
   typecheck_matches(l)(c)(_)(_)(_)(_)(_)(_)(_)(_) = case_num_err(l)(c)
   types :: [(String, Type_constr)]
   types =
-    second(Type_constr) <$> ([("Arr", build_arr)] ++ (plain_type <$> [("Cbit", Cbit), ("Int", Int_type), ("Qbit", Qbit)]))
+    second(Type_constr) <$>
+    ([("Arr", build_arr), ("Creg", build_creg)] ++ (plain_type <$> [("Int", Int_type), ("Qbit", Qbit)]))
   typevars :: [(String, Location)] -> [Name_tree] -> [Name_tree] -> Either(String)([(String, Location)], [String], [String])
   typevars(r)(x)(y) = vars_to_res(r)(x) >>= \(r', x') -> (\(r'', y') -> (r'', x', y')) <$> vars_to_res(r')(y)
   typing ::

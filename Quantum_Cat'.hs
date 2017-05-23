@@ -25,5 +25,5 @@ module Quantum_Cat' where
         Right(inp2) -> case expr_tree(inp2) of
           Left(l, c) -> Left("Parse error in input" ++ location'(l)(c) ++ ".")
           Right(inp3) ->
-            type_expr(r)(con)(b)(standard_expr(inp3)) >>= \inp4 -> circuit(w)(inp4) >>= Right <$> codefile <$> cleanup
+            type_expr(r)(con)(b)(standard_expr(inp3)) >>= \inp4 -> codefile <$> optimise <$> circuit(w)(inp4)
 -----------------------------------------------------------------------------------------------------------------------------

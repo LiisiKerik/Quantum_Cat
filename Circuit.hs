@@ -4,66 +4,73 @@ module Circuit where
   import Data.Bifunctor
   import Tree
   import Typing
-  data Circuit = Circuit(Integer)(Integer)([Gate])
-  data Gate = Cnot_g(Integer)(Integer) | Mea_g(Integer)(Integer) | Single_g(String)(Integer) deriving(Show)
-  data Tagged_circuit = Tagged_circuit([(Integer, Bool)])([(Integer, Bool)])([(Gate, Bool)])
+  data Circuit = Circuit(Integer)([Integer])(Integer)([Gate]) deriving(Show)
+  data Gate = Cnot_g(Integer)(Integer) | Mea_g(Integer)(Integer)(Integer) | Single_g(String)(Integer) deriving(Show)
   data Val =
     Alg_val(String)([Val]) |
     Arr_val([Val]) |
-    Cbit_pointer(Integer) |
+    Creg_pointer(Integer) |
     Func_val([(String, Either(Def_tree'')(Val))] -> Circuit -> Val -> (Circuit, Val)) |
     Int_val(Integer) |
     Qbit_pointer(Integer) |
     Struct_val([Val])
-  add_gate :: (Gate, Bool) -> Tagged_circuit -> Tagged_circuit
-  add_gate(g)(Tagged_circuit(c)(q)(g')) = Tagged_circuit(c)(q)(g : g')
+  instance Show Val where
+    show x = case x of
+      Alg_val(y)(z) -> "Alg_val " ++ show y ++ show z
+      Arr_val(y) -> "Arr_val " ++ show y
+      Creg_pointer(y) -> "Creg_pointer " ++ show y
+      Func_val(_) -> "Func_val FUNCTION"
+      Int_val(y) -> "Int_val " ++ show y
+      Qbit_pointer(y) -> "Qbit_pointer " ++ show y
+      Struct_val(y) -> "Struct_val " ++ show y
   add_to_context :: [(String, Either(Def_tree'')(Val))] -> [String] -> [Val] -> [(String, Either(Def_tree'')(Val))]
   add_to_context(d)([])([]) = d
   add_to_context(d)(x : y)(z : w) = (x, Right(z)) : add_to_context(d)(y)(w)
   add_to_context(_)(_)(_) = error("Internal compiler error. Failed pattern match due to wrong number of variables.")
-  bit_lookup :: [(Integer, t)] -> Integer -> t
-  bit_lookup(m)(i) = unsafe_lookup(m)(i)("Internal compiler error. Found an undefined bit.")
+  circ_lookup :: [(Integer, Integer)] -> Integer -> Integer
+  circ_lookup(x)(y) = unsafe_lookup(x)(y)("Internal compiler error. Bit or register lookup failure.")
   circuit :: [(String, Def_tree'')] -> Expression_tree'' -> Either(String)(Circuit, Val)
-  circuit(d)(e) = case res_bits(e) of
-    Just(_) -> Right(circuit'(second(Left) <$> d)(Circuit(0)(0)([]))(e))
-    Nothing -> Left("Circuit generation error. Circuit can only be generated for an expression of type Arr[Cbit]{n}.")
+  circuit(d)(e) = return(circuit'(second(Left) <$> d)(Circuit(0)([])(0)([]))(e)) <$> res_bits(e)
   circuit' :: [(String, Either(Def_tree'')(Val))] -> Circuit -> Expression_tree'' -> (Circuit, Val)
-  circuit'(d)(circ @ (Circuit(c)(q)(g)))(Expression_tree''(_)(e)(_)) = case e of
+  circuit'(d)(circ @ (Circuit(cc)(c)(q)(g)))(Expression_tree''(_)(e)(_)) = case e of
     Alg''(x)(e') -> eval_struct(Alg_val(x))(d)(circ)(e')
     App''(e1)(e2) -> f(d)(circ')(x) where
       (_, Func_val(f)) = circuit'(d)(circ)(e1)
       (circ', x) = circuit'(d)(circ)(e2)
     Cnot'' ->
-      func_val(
-        circ)(
-        pure_func(
-          \(Qbit_pointer(x)) ->
-          \(Circuit(c')(q')(g')) ->
+      func_val
+        (circ)
+        (pure_func
+          (\(Qbit_pointer(x)) ->
+          \(Circuit(cc')(c')(q')(g')) ->
           \(p @ (Qbit_pointer(y))) ->
-          (Circuit(c')(q')(Cnot_g(x)(y) : g'), p)))
-    Field''(i) -> func_val(circ)(\circ' -> \(Struct_val(x)) -> (circ', x !! fromInteger(i)))
+            (Circuit(cc')(c')(q')(Cnot_g(x)(y) : g'), p)))
+    Field''(n) -> func_val(circ)(\circ' -> \(Struct_val(x)) -> (circ', x !! fromInteger(n)))
     Fun''(x)(e') -> (circ, Func_val(\d' -> \circ' -> \x' -> circuit'((x, Right(x')) : d')(circ')(e')))
     Int_expr''(n) -> (circ, Int_val(n))
-    Lift''(_)(v) -> case v of
+    Lift''(_)(m) -> case m of
       Int_constant(n) ->
-        func_val(circ)(\circ' -> \x -> second(Arr_val)(replicate_circuit(n)(replicate_f(tag_circ(circ')(x)))(circ')(x)))
+        func_val(circ)(\circ' -> \x -> second(Arr_val)(uncurry(replicate_circuit(circ')(n))(cleanup(circ', x))))
       _ -> error("Internal compiler error. Found a free integer type variable during code generation.")
-    Map''(_)(_)(_) ->
-      func_val(
-        circ)
+    Map''{} ->
+      func_val
+        (circ)
         (
           \circ' ->
           \(Func_val(f)) ->
-          (circ', Func_val(\d' -> \circ'' -> \(Arr_val(x)) -> second(Arr_val)(map_help(f)(d')(circ'')(x)))))
-    Match''(e')(cases) -> case circuit'(d)(circ)(e') of
+            (circ', Func_val(\d' -> \circ'' -> \(Arr_val(x)) -> second(Arr_val)(map_help(f)(d')(circ'')(x)))))
+    Match''(e')(m) -> case circuit'(d)(circ)(e') of
       (circ', Alg_val(x)(y)) -> let
-        (z, e'') = find_case(cases)(x) in
+        (z, e'') = find_case(m)(x) in
           circuit'(add_to_context(d)(z)(y))(circ')(e'')
       _ -> error("Internal compiler error. Match expression got something that is not an algebraic structure as parameter.")
-    Mes'' ->
-      func_val(
-        circ)(
-        \(Circuit(c')(q')(g')) -> \(Qbit_pointer(x)) -> (Circuit(c' + 1)(q')(Mea_g(x)(c') : g'), Cbit_pointer(c')))
+    Mes''{} ->
+      func_val
+        (circ)
+        (
+          \(Circuit(cc')(c')(q')(g')) ->
+          \(Arr_val(x)) ->
+            ((\(g'', c'') -> Circuit(cc' + 1)(c'' : c')(q')(g''))(mes_help(cc')(g')(0)(x)), Creg_pointer(cc')))
     Name''(x)(t)(n) -> case unsafe_lookup(d)(x)("Internal compiler error. Found an undefined variable.") of
       Left(Def_tree''(_)(Bind(b)(_))(e')) -> circuit'(d)(circ)((case b of
         Global(v)(w) -> type_application(zip(v)(t))(zip(w)(n))
@@ -71,7 +78,52 @@ module Circuit where
       Right(v) -> (circ, v)
     Single_qbit_def(f) -> single_gate(circ)(f)
     Str''(e') -> eval_struct(Struct_val)(d)(circ)(e')
-    Take'' -> (Circuit(c)(q + 1)(g), Qbit_pointer(q))
+    Take'' -> (Circuit(cc)(c)(q + 1)(g), Qbit_pointer(q))
+  clean_cregs :: Integer -> Integer -> [(Integer, Bool)] -> ([Integer], [(Integer, Integer)])
+  clean_cregs(m)(n)(x) = case x of
+    [] -> ([], [])
+    (c, b) : t -> if b then bimap(c :)((m, n) :)(clean_cregs(m - 1)(n - 1)(t)) else clean_cregs(m - 1)(n)(t)
+  clean_gates :: Integer -> (([(Integer, Bool)], [Bool]), [Gate]) -> (([(Integer, Bool)], [Bool]), [Gate])
+  clean_gates(cc)(r @ ((c, q), g)) = case g of
+    [] -> r
+    h : t -> let
+      f(f', (gc, gq)) = f'(clean_gates(cc)((gc(c), gq(q)), t))
+      add_gate = second(h :) in
+        case h of
+          Cnot_g(x)(y) -> let
+            y' = q !! fromInteger(y) in
+              f
+                (if q !! fromInteger(x) then
+                  (add_gate, (id, if y' then id else update_q(y)))
+                else
+                  second(id, )(if y' then (add_gate, update_q(x)) else (id, id)))
+          Mea_g(x)(y)(_) -> let
+            y' = snd(c !! fromInteger(cc - y - 1)) in
+              f
+                (if q !! fromInteger(x) then
+                  (add_gate, (if y' then id else update_c(cc)(y), id))
+                else
+                  second(id, )(if y' then (add_gate, update_q(x)) else (id, id)))
+          Single_g(_)(x) -> f(if q !! fromInteger(x) then add_gate else id, (id, id))
+  clean_qbits :: Integer -> Integer -> [Bool] -> (Integer, [(Integer, Integer)])
+  clean_qbits(m)(n)(x) = case x of
+    [] -> (n, [])
+    h : t -> if h then second((m, n) :)(clean_qbits(m + 1)(n + 1)(t)) else clean_qbits(m + 1)(n)(t)
+  cleanup' :: Integer -> [(Integer, Bool)] -> [Bool] -> [Gate] -> Val -> (Circuit, Val)
+  cleanup'(cc)(c)(q)(g)(x) =
+    (Circuit(cc')(c')(qc)(transf_gates(fc)(fq)(g)), transf_val(fc)(fq)(x)) where
+      cc' = count_cregs(c)
+      (c', cmap) = clean_cregs(cc - 1)(cc' - 1)(c)
+      (qc, qmap) = clean_qbits(0)(0)(q)
+      fc = circ_lookup(cmap)
+      fq = circ_lookup(qmap)
+  cleanup :: (Circuit, Val) -> (Circuit, Val)
+  cleanup(Circuit(cc)(c)(q)(g), x) = cleanup'(cc)(c'')(q'')(g')(x) where
+    ((c'', q''), g') = clean_gates(cc)(tag_circ(cc)(init'(c), replicate(fromInteger(q))(False))(x), g)
+  count_cregs :: [(t, Bool)] -> Integer
+  count_cregs(x) = case x of
+    [] -> 0
+    (_, h) : t -> (if h then (+ 1) else id)(count_cregs(t))
   eval_struct :: ([Val] -> Val) -> [(String, Either(Def_tree'')(Val))] -> Circuit -> [Expression_tree''] -> (Circuit, Val)
   eval_struct(f)(d)(c)(e) = second(f)(eval_struct'(d)(c)(e))
   eval_struct' :: [(String, Either(Def_tree'')(Val))] -> Circuit -> [Expression_tree''] -> (Circuit, [Val])
@@ -81,29 +133,12 @@ module Circuit where
       (c', h') = circuit'(d)(c)(h)
   find_case :: [Match_case''] -> String -> ([String], Expression_tree'')
   find_case(x)(y) = case x of
-    [] -> error("Internal type error. Failed algebraic data type matching.")
+    [] -> error("Internal compiler error. Failed algebraic data type matching.")
     Match_case''(z)(w)(a) : b -> if z == y then (w, a) else find_case(b)(y)
-  find_relevant :: Tagged_circuit -> Tagged_circuit
-  find_relevant(Tagged_circuit(c)(q)(g)) = case g of
-    [] -> Tagged_circuit(c)(q)([])
-    h' @ (h, _) : t -> case h of
-      Cnot_g(x)(y) -> case (bit_lookup(q)(x), bit_lookup(q)(y)) of
-        (False, False) -> add_gate(h')(find_relevant(Tagged_circuit(c)(q)(t)))
-        (False, True) -> add_gate(h, True)(find_relevant(Tagged_circuit(c)(upd(q)(x))(t)))
-        (True, False) -> add_gate(h, True)(find_relevant(Tagged_circuit(upd(q)(y))(q)(t)))
-        (True, True) -> add_gate(h, True)(find_relevant(Tagged_circuit(c)(q)(t)))
-      Mea_g(x)(y) -> case (bit_lookup(q)(x), bit_lookup(c)(y)) of
-        (False, False) -> add_gate(h')(find_relevant(Tagged_circuit(c)(q)(t)))
-        (False, True) -> add_gate(h, True)(find_relevant(Tagged_circuit(c)(upd(q)(x))(t)))
-        (True, False) -> add_gate(h, True)(find_relevant(Tagged_circuit(upd(c)(y))(q)(t)))
-        (True, True) -> add_gate(h, True)(find_relevant(Tagged_circuit(c)(q)(t)))
-      Single_g(_)(x) -> add_gate(h, bit_lookup(q)(x))(find_relevant(Tagged_circuit(c)(q)(t)))
   func_val :: Circuit -> (Circuit -> Val -> (Circuit, Val)) -> (Circuit, Val)
   func_val(circ)(f) = (circ, Func_val(return(f)))
-  init_circ :: Circuit -> Tagged_circuit
-  init_circ(Circuit(c)(q)(g)) = Tagged_circuit(init_int(c))(init_int(q))((, False) <$> g)
-  init_int :: Integer -> [(Integer, Bool)]
-  init_int(x) = [(i, False) | i <- [0 .. x - 1]]
+  init' :: [t] -> [(t, Bool)]
+  init' = (<$>)(, False)
   map_help ::
     ([(String, Either(Def_tree'')(Val))] -> Circuit -> Val -> (Circuit, Val)) ->
     [(String, Either(Def_tree'')(Val))] ->
@@ -114,55 +149,74 @@ module Circuit where
     [] -> (c, [])
     h : t -> second(h' :)(map_help(f)(d)(c')(t)) where
       (c', h') = f(d)(c)(h)
-  offset_map :: Integer -> [(Integer, Bool)] -> ([(Integer, Integer)], Integer)
-  offset_map(n)(m) = case m of
-    [] -> ([], n)
-    (i, b) : t -> if b then first((i, n) :)(offset_map(n + 1)(t)) else offset_map(n)(t)
-  offset_value :: [(Integer, Integer)] -> [(Integer, Integer)] -> Val -> Val
-  offset_value(c)(q)(x) = case x of
-    Arr_val(y) -> Arr_val(offset_value(c)(q) <$> y)
-    Cbit_pointer(y) -> Cbit_pointer(bit_lookup(c)(y))
-    Qbit_pointer(y) -> Qbit_pointer(bit_lookup(q)(y))
-    Struct_val(y) -> Arr_val(offset_value(c)(q) <$> y)
-    _ -> x
+  mes_help :: Integer -> [Gate] -> Integer -> [Val] -> ([Gate], Integer)
+  mes_help(m)(g)(n)(x) = case x of
+    [] -> (g, n)
+    h : t -> case h of
+      Qbit_pointer(y) -> mes_help(m)(Mea_g(y)(m)(n) : g)(n + 1)(t)
+      _ -> error("Internal compiler error. Tried to measure something that is not a qbit.")
+  offset_gate :: Integer -> Integer -> Gate -> Gate
+  offset_gate(c)(q)(g) = case g of
+    Cnot_g(x)(y) -> Cnot_g(x + q)(y + q)
+    Mea_g(x)(y)(z) -> Mea_g(x + q)(y + c)(z)
+    Single_g(f)(x) -> Single_g(f)(x + q)
+  offset_val :: Integer -> Integer -> Val -> Val
+  offset_val(c)(q)(v) = let
+    offset' = (<$>)(offset_val(c)(q)) in
+      case v of
+        Alg_val(x)(y) -> Alg_val(x)(offset'(y))
+        Arr_val(x) -> Arr_val(offset'(x))
+        Creg_pointer(x) -> Creg_pointer(x + c)
+        Qbit_pointer(x) -> Qbit_pointer(x + q)
+        Struct_val(x) -> Struct_val(offset'(x))
+        _ -> v
   pure_func :: (Val -> Circuit -> Val -> (Circuit, Val)) -> Circuit -> Val -> (Circuit, Val)
   pure_func(f)(c)(x) = func_val(c)(f x)
-  replicate_circuit :: Integer -> (Circuit -> Val -> (Circuit, Val)) -> Circuit -> Val -> (Circuit, [Val])
-  replicate_circuit(n)(f)(c)(v) = if n == 0 then (c, []) else second(v' :)(replicate_circuit(n - 1)(f)(c')(v)) where
-    (c', v') = f(c)(v)
-  replicate_f :: Tagged_circuit -> Circuit -> Val -> (Circuit, Val)
-  replicate_f(Tagged_circuit(c')(q')(g'))(Circuit(c)(q)(g))(v) =
-    (Circuit(c3)(q3)(transf_gates(g)(c'')(q'')(g')), offset_value(c'')(q'')(v)) where
-      (c'', c3) = offset_map(c)(c')
-      (q'', q3) = offset_map(q)(q')
-  res_bits :: Expression_tree'' -> Maybe(Integer)
-  res_bits(Expression_tree''(_)(_)(Arr(Cbit)(Int_constant(n)))) = Just(n)
-  res_bits(_) = Nothing
+  replicate_circuit :: Circuit -> Integer -> Circuit -> Val -> (Circuit, [Val])
+  replicate_circuit(circ @ (Circuit(cc)(c)(q)(g)))(n)(circ' @ (Circuit(cc')(c')(q')(g')))(v) =
+    if n == 0 then
+      (circ, [])
+    else
+      second
+        (offset_val(cc)(q)(v) :)
+        (replicate_circuit(Circuit(cc + cc')(c' ++ c)(q + q')((offset_gate(cc)(q) <$> g') ++ g))(n - 1)(circ')(v))
+  res_bits :: Expression_tree'' -> Either(String)(Integer)
+  res_bits(Expression_tree''(_)(_)(Creg(Int_constant(n)))) = Right(n)
+  res_bits(_) = Left("Circuit generation error. Circuit can only be generated for an expression of type Creg{n}.")
   single_gate :: Circuit -> String -> (Circuit, Val)
   single_gate(circ)(f) =
-    func_val(circ)(\(Circuit(c)(q)(g)) -> \p @ (Qbit_pointer(x)) -> (Circuit(c)(q)(Single_g(f)(x) : g), p))
-  tag_arr :: Tagged_circuit -> [Val] -> Tagged_circuit
-  tag_arr(c)(v) = case v of
-    [] -> c
-    h : t -> tag_arr(tagged_circ(c)(h))(t)
-  tag_circ :: Circuit -> Val -> Tagged_circuit
-  tag_circ(c) = tagged_circ(init_circ(c))
-  tagged_circ :: Tagged_circuit -> Val -> Tagged_circuit
-  tagged_circ(circ @ (Tagged_circuit(c)(q)(g)))(x) = case x of
-    Arr_val(y) -> tag_arr(circ)(y)
-    Cbit_pointer(y) -> find_relevant(Tagged_circuit(upd(c)(y))(q)(g))
-    Qbit_pointer(y) -> find_relevant(Tagged_circuit(c)(upd(q)(y))(g))
-    Struct_val(y) -> tag_arr(circ)(y)
-    _ -> circ
-  transf_gate :: [(Integer, Integer)] -> [(Integer, Integer)] -> Gate -> Gate
-  transf_gate(c)(q)(g) = case g of
-    Cnot_g(x)(y) -> Cnot_g(bit_lookup(q)(x))(bit_lookup(q)(y))
-    Mea_g(x)(y) -> Mea_g(bit_lookup(q)(x))(bit_lookup(c)(y))
-    Single_g(f)(x) -> Single_g(f)(bit_lookup(q)(x))
-  transf_gates :: [Gate] -> [(Integer, Integer)] -> [(Integer, Integer)] -> [(Gate, Bool)] -> [Gate]
-  transf_gates(g)(c)(q)(g') = case g' of
-    [] -> g
-    (h, b) : t -> if b then transf_gate(c)(q)(h) : transf_gates(g)(c)(q)(t) else transf_gates(g)(c)(q)(t)
+    func_val(circ)(\(Circuit(n)(c)(q)(g)) -> \p @ (Qbit_pointer(x)) -> (Circuit(n)(c)(q)(Single_g(f)(x) : g), p))
+  tag_arr :: Integer -> ([(Integer, Bool)], [Bool]) -> [Val] -> ([(Integer, Bool)], [Bool])
+  tag_arr(cc)(t)(x) = case x of
+    [] -> t
+    y : z -> tag_arr(cc)(tag_circ(cc)(t)(y))(z)
+  tag_circ :: Integer -> ([(Integer, Bool)], [Bool]) -> Val -> ([(Integer, Bool)], [Bool])
+  tag_circ(cc)(t @ (c, q))(x) = let
+    ta = tag_arr(cc)(t) in
+      case x of
+        Alg_val(_)(y) -> ta(y)
+        Arr_val(y) -> ta(y)
+        Creg_pointer(y) -> (update_c(cc)(y)(c), q)
+        Qbit_pointer(y) -> (c, update_q(y)(q))
+        Struct_val(y) -> ta(y)
+        _ -> t
+  transf_gates :: (Integer -> Integer) -> (Integer -> Integer) -> [Gate] -> [Gate]
+  transf_gates(c)(q)(g) = case g of
+    [] -> []
+    h : t -> ((case h of
+      Cnot_g(x)(y) -> Cnot_g(q(x))(q(y))
+      Mea_g(x)(y)(z) -> Mea_g(q(x))(c(y))(z)
+      Single_g(f)(x) -> Single_g(f)(q(x))) :)(transf_gates(c)(q)(t))
+  transf_val :: (Integer -> Integer) -> (Integer -> Integer) -> Val -> Val
+  transf_val(c)(q)(x) = let
+    f = (<$>)(transf_val(c)(q)) in
+      case x of
+        Alg_val(y)(z) -> Alg_val(y)(f(z))
+        Arr_val(y) -> Arr_val(f(y))
+        Creg_pointer(y) -> Creg_pointer(c(y))
+        Qbit_pointer(y) -> Qbit_pointer(q(y))
+        Struct_val(y) -> Struct_val(f(y))
+        _ -> x
   type_application :: [(String, Type)] -> [(String, Int_branch)] -> Expression_tree'' -> Expression_tree''
   type_application(t)(u)(Expression_tree''(l)(e)(ty)) = Expression_tree''(l)(type_application'(t)(u)(e))(type_repl(t)(u)(ty))
   type_application' :: [(String, Type)] -> [(String, Int_branch)] -> Expression_branch'' -> Expression_branch''
@@ -183,7 +237,14 @@ module Circuit where
     Function_type''(w)(a) -> Function_type''(type_repl(x)(y)(w))(type_repl(x)(y)(a))
     Typevar(w) -> unsafe_lookup(x)(w)("Internal compiler error. Failed to perform type variable replacement.")
     _ -> z
-  upd :: [(Integer, Bool)] -> Integer -> [(Integer, Bool)]
-  upd([])(_) = error("Internal compiler error. Tried to perform relevancy update on a non-existing bit.")
-  upd(p @ (i, _) : t)(y) = if i == y then (i, True) : t else p : upd(t)(y)
+  update_c :: Integer -> Integer -> [(Integer, Bool)] -> [(Integer, Bool)]
+  update_c(x)(y) = update_c'(x - y - 1)
+  update_c' :: Integer -> [(Integer, Bool)] -> [(Integer, Bool)]
+  update_c'(x)(y) = case y of
+    [] -> error("Internal compiler error. Tried to perform relevancy update on a non-existing creg.")
+    z @ (w, _) : a -> if x == 0 then (w, True) : a else z : update_c'(x - 1)(a)
+  update_q :: Integer -> [Bool] -> [Bool]
+  update_q(x)(y) = case y of
+    [] -> error("Internal compiler error. Tried to perform relevancy update on a non-existing qbit.")
+    z : w -> if x == 0 then True : w else z : update_q(x - 1)(w)
 -----------------------------------------------------------------------------------------------------------------------------

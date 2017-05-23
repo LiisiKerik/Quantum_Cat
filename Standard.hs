@@ -11,7 +11,7 @@ module Standard where
       deriving(Show)
   data Expression_tree' = Expression_tree'(Integer)(Integer)(Expression_branch') deriving(Show)
   data Match_tree' = Match_tree'(Name_tree)([Name_tree])(Expression_tree') deriving(Show)
-  data Tree' = Tree'([Data_tree])([Def_tree'])
+  data Tree' = Tree'([Data_tree])([Def_tree']) deriving(Show)
   standard :: Tree -> Tree'
   standard(Tree(x)(y)) = Tree'(x)(standard_def <$> y)
   standard_arguments :: [Argument_tree] -> Type_tree -> Expression_tree' -> (Type_tree, Expression_tree')
