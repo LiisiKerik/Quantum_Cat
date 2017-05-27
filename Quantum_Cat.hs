@@ -1,4 +1,6 @@
 -----------------------------------------------------------------------------------------------------------------------------
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 import Quantum_Cat'
 import System.Directory
 import System.Environment

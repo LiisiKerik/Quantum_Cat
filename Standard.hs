@@ -1,4 +1,6 @@
 -----------------------------------------------------------------------------------------------------------------------------
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Standard where
   import Tree
   data Def_tree' = Def_tree'(Decl_tree)(Type_tree)(Expression_tree') deriving(Show)
