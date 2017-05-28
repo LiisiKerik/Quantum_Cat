@@ -12,7 +12,7 @@ module Typing where
   data Expression_branch'' =
     Alg'' String [Expression_tree''] |
     App'' Expression_tree'' Expression_tree'' |
-    Cnot'' |
+    Double_qbit_def String |
     Field'' Integer |
     Fun'' String Expression_tree'' |
     If_gate'' Type Int_branch |
@@ -277,7 +277,7 @@ module Typing where
     (\(x, y, z, w, a) -> (x, Def_tree'' Language (Bind (Global y z) w) (Expression_tree'' Language a w))) <$>
     (
       [
-        ("Cnot", [], [], Function_type'' Qbit (Function_type'' Qbit Qbit), Cnot''),
+        --("CX", [], [], Function_type'' Qbit (Function_type'' Qbit Qbit), Cnot''),
         (
           "If_gate",
           ["U"],
@@ -309,10 +309,13 @@ module Typing where
           Function_type'' (Arr Qbit (Int_variable "n")) (Creg (Int_variable "n")),
           Mes'' (Int_variable "n")),
         ("Take", [], [], Qbit, Take''),
-        ("Toffoli", [], [], Function_type'' Qbit (Function_type'' Qbit (Function_type'' Qbit Qbit)), Toffoli'')] ++
+        ("CCX", [], [], Function_type'' Qbit (Function_type'' Qbit (Function_type'' Qbit Qbit)), Toffoli'')] ++
       (
         (\(x, y) -> (x, [], [], Function_type'' Qbit Qbit, Single_qbit_def y)) <$>
-        [("H", "h"), ("S", "s"), ("S'", "sdg"), ("T", "t"), ("T'", "tdg"), ("X", "x"), ("Y", "y"), ("Z", "z")]))
+        [("H", "h"), ("S", "s"), ("S'", "sdg"), ("T", "t"), ("T'", "tdg"), ("X", "x"), ("Y", "y"), ("Z", "z")]) ++
+      (
+        (\(x, y) -> (x, [], [], Function_type'' Qbit (Function_type'' Qbit Qbit), Double_qbit_def y)) <$>
+        [("CH", "ch"), ("CX", "cx"), ("CY", "cy"), ("CZ", "cz")]))
   init_res :: [(String, Location)]
   init_res = (, Language) <$> (fst <$> types) ++ (fst <$> init_bind)
   int' :: Int_branch -> Int''

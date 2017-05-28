@@ -73,7 +73,7 @@ module Code where
       print_gate (x, y) = x ++ " " ++ cmm (a <$> y)
     in
       print_gate (case g of
-        Cnot_g x y -> ("cx", [x, y])
+        Double_g f x y -> (f, [x, y])
         Single_g f x -> (f, [x])
         Toffoli_g x y z -> ("ccx", [x, y, z]))
   newl :: [String] -> String

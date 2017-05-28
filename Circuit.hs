@@ -8,7 +8,8 @@ module Circuit where
   import Typing
   data Circuit = Circuit Integer [Integer] Integer Integer [Gate] deriving (Eq, Show)
   data Gate = G' Gate' | If_g Integer Integer Integer [Gate'] [Integer] | Mea_g Integer Integer Integer deriving (Eq, Show)
-  data Gate' = Cnot_g Integer Integer | Single_g String Integer | Toffoli_g Integer Integer Integer deriving (Eq, Show)
+  data Gate' = Double_g String Integer Integer | Single_g String Integer | Toffoli_g Integer Integer Integer
+    deriving (Eq, Show)
   data Val =
     Alg_val String [Val] |
     Arr_val [Val] |
@@ -34,10 +35,10 @@ module Circuit where
     App'' e1 e2 -> circuit' d circ e1 >>= \(_, fn) -> case fn of
       Func_val f -> circuit' d circ e2 >>= uncurry (f d)
       _ -> error "Internal compiler error. Expected function when generating code, got non-function."
-    Cnot'' ->
+    Double_qbit_def f ->
       func_val
         circ
-        (pure_func (\(Qbit_pointer x) -> \circ' -> \(p @ (Qbit_pointer y)) -> Right (add_g circ' (Cnot_g x y), p)))
+        (pure_func (\(Qbit_pointer x) -> \circ' -> \(p @ (Qbit_pointer y)) -> Right (add_g circ' (Double_g f x y), p)))
     Field'' n -> func_val circ (\circ' -> \(Struct_val x) -> Right (circ', x !! fromInteger n))
     Fun'' x e' -> Right (circ, Func_val (\d' -> \circ' -> \x' -> circuit' ((x, Right x') : d') circ' e'))
     If_gate'' t _ ->
@@ -131,7 +132,7 @@ module Circuit where
       in
         (\(f', (gc, gq)) -> f' (clean_gates cc ((gc c, gq q), (cg - 1, t)))) (case h of
           G' g' -> case g' of
-            Cnot_g x y ->
+            Double_g _ x y ->
               let
                 x' = q !! fromInteger x
                 y' = q !! fromInteger y
@@ -265,8 +266,8 @@ module Circuit where
       t' = tag_qbits t in
         case h of
           G' g' -> first (g' :) <$> (case g' of
-            Cnot_g x y -> t' (comp_all (update_q <$> [x, y]) b)
-            Single_g f x -> t' (update_q x b)
+            Double_g _ x y -> t' (comp_all (update_q <$> [x, y]) b)
+            Single_g _ x -> t' (update_q x b)
             Toffoli_g x y z -> t' (comp_all (update_q <$> [x, y, z]) b))
           _ -> Left "Code generation error. Tried to put a non-unitary gate into a subroutine."
   transf_gate :: (Integer -> Integer) -> (Integer -> Integer) -> Gate -> Gate
@@ -276,7 +277,7 @@ module Circuit where
     Mea_g x y z -> Mea_g (q x) (c y) z
   transf_gate' :: (Integer -> Integer) -> Gate' -> Gate'
   transf_gate' q g = case g of
-    Cnot_g x y -> Cnot_g (q x) (q y)
+    Double_g f x y -> Double_g f (q x) (q y)
     Single_g f x -> Single_g f (q x)
     Toffoli_g x y z -> Toffoli_g (q x) (q y) (q z)
   transf_val :: (Integer -> Integer) -> (Integer -> Integer) -> Val -> Val
