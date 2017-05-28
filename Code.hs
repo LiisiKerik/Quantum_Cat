@@ -44,7 +44,7 @@ module Code where
     h : t -> creg_help (rgmnt_c n) h m (cregs' (m + 1) (n + 1) t)
   encode_gate :: Integer -> [(Integer, String)] -> Gate -> (Integer, String)
   encode_gate i c g = case g of
-    Cnot_g x y -> (i, "cx " ++ cmm (brack_q <$> [x, y]))
+    G' g' -> (i, encode_gate' brack_q g')
     If_g x y z w a -> let
       f = " " ++ rgmnt "f" i ++ " " in
         (
@@ -53,7 +53,7 @@ module Code where
             f ++
             cmm ((\j -> rgmnt_a j) <$> [0 .. z - 1]) ++
             " {\n  " ++
-            intercalate ";\n  " (encode_gate' <$> w) ++
+            intercalate ";\n  " (encode_gate' rgmnt_a <$> w) ++
             ";}\nif (" ++
             creg_lookup c x ++
             " == " ++
@@ -61,23 +61,23 @@ module Code where
             f ++
             cmm (brack_q <$> a))
     Mea_g x y z -> (i, "measure " ++ brack_q x ++ " -> " ++ creg_lookup c y ++ brackets z)
-    Single_g f x -> (i, f ++ " " ++ brack_q x)
-    Toffoli_g x y z -> (i, "ccx " ++ cmm (brack_q <$> [x, y, z]))
   encode_gates :: Integer -> [(Integer, String)] -> [Gate] -> [String]
   encode_gates i c g = case g of
     [] -> []
     h : t -> let
       (i', s) = encode_gate i c h in
         s : encode_gates i' c t
-  encode_gate' :: Gate' -> String
-  encode_gate' g = print_gate' (case g of
-    Cnot_g' x y -> ("cx", [x, y])
-    Single_g' f x -> (f, [x])
-    Toffoli_g' x y z -> ("ccx", [x, y, z]))
+  encode_gate' :: (Integer -> String) -> Gate' -> String
+  encode_gate' a g =
+    let
+      print_gate (x, y) = x ++ " " ++ cmm (a <$> y)
+    in
+      print_gate (case g of
+        Cnot_g x y -> ("cx", [x, y])
+        Single_g f x -> (f, [x])
+        Toffoli_g x y z -> ("ccx", [x, y, z]))
   newl :: [String] -> String
   newl = intercalate ";\n"
-  print_gate' :: (String, [Integer]) -> String
-  print_gate' (x, y) = x ++ " " ++ cmm (rgmnt_a <$> y)
   rgmnt :: String -> Integer -> String
   rgmnt x y = x ++ show y
   rgmnt_a :: Integer -> String

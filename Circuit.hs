@@ -7,14 +7,8 @@ module Circuit where
   import Tree
   import Typing
   data Circuit = Circuit Integer [Integer] Integer Integer [Gate] deriving (Eq, Show)
-  data Gate =
-    Cnot_g Integer Integer |
-    If_g Integer Integer Integer [Gate'] [Integer] |
-    Mea_g Integer Integer Integer |
-    Single_g String Integer |
-    Toffoli_g Integer Integer Integer
-      deriving (Eq, Show)
-  data Gate' = Cnot_g' Integer Integer | Single_g' String Integer | Toffoli_g' Integer Integer Integer deriving (Eq, Show) -- TODO: FIND A WAY TO AVOID REPEATED CODE IN GATE, GATE'
+  data Gate = G' Gate' | If_g Integer Integer Integer [Gate'] [Integer] | Mea_g Integer Integer Integer deriving (Eq, Show)
+  data Gate' = Cnot_g Integer Integer | Single_g String Integer | Toffoli_g Integer Integer Integer deriving (Eq, Show)
   data Val =
     Alg_val String [Val] |
     Arr_val [Val] |
@@ -24,8 +18,8 @@ module Circuit where
     Qbit_pointer Integer |
     Struct_val [Val]
       deriving (Eq, Show)
-  add_g :: Circuit -> Gate -> Circuit
-  add_g (Circuit cc c q cg t) h = Circuit cc c q (cg + 1) (h : t)
+  add_g :: Circuit -> Gate' -> Circuit
+  add_g (Circuit cc c q cg t) h = Circuit cc c q (cg + 1) (G' h : t)
   add_to_context :: [(String, Either Def_tree'' Val)] -> [String] -> [Val] -> [(String, Either Def_tree'' Val)]
   add_to_context d [] [] = d
   add_to_context d (x : y) (z : w) = (x, Right z) : add_to_context d y w
@@ -61,9 +55,19 @@ module Circuit where
                       f d circ' z >>=
                       \(Circuit _ c'' q'' cg'' g'', z') ->
                         if c'' == c' && q'' == q' && z' == z then
-                          (\(sub_gates, tagged_qbits) -> let
-                            (inps, arg_num) = gate_map tagged_qbits 0 0 in
-                              (Circuit cc' c' q' (cg' + 1) (If_g x y arg_num (make_subroutine inps sub_gates) (fst <$> inps) : g'), z)) <$> tag_qbits (take (fromInteger (cg'' - cg')) g'') (replicate (fromInteger q') False)
+                          (\(sub_gates, tagged_qbits) ->
+                            let
+                              (inps, arg_num) = gate_map tagged_qbits 0 0
+                            in
+                              (
+                                Circuit
+                                  cc'
+                                  c'
+                                  q'
+                                  (cg' + 1)
+                                  (If_g x y arg_num (transf_gate' (circ_lookup inps) <$> sub_gates) (fst <$> inps) : g'),
+                                z)) <$>
+                          tag_qbits (take (fromInteger (cg'' - cg')) g'') (replicate (fromInteger q') False)
                         else
                           Left
                             ("Code generation error. The function fed to If_gate is not allowed to " ++
@@ -126,12 +130,21 @@ module Circuit where
         ifq cond n = if cond then id else update_q n
       in
         (\(f', (gc, gq)) -> f' (clean_gates cc ((gc c, gq q), (cg - 1, t)))) (case h of
-          Cnot_g x y ->
-            let
-              x' = q !! fromInteger x
-              y' = q !! fromInteger y
-            in
-              iff [x', y'] [] [ifq x' x, ifq y' y]
+          G' g' -> case g' of
+            Cnot_g x y ->
+              let
+                x' = q !! fromInteger x
+                y' = q !! fromInteger y
+              in
+                iff [x', y'] [] [ifq x' x, ifq y' y]
+            Single_g _ x -> iff [q !! fromInteger x] [] []
+            Toffoli_g x y z ->
+              let
+                x' = q !! fromInteger x
+                y' = q !! fromInteger y
+                z' = q !! fromInteger z
+              in
+                iff [x', y', z'] [] [ifq x' x, ifq y' y, ifq z' z]
           If_g x _ _ _ y ->
             let
               x' = q !! fromInteger (cc - x - 1)
@@ -143,15 +156,7 @@ module Circuit where
               x' = q !! fromInteger x
               y' = snd (c !! fromInteger (cc - y - 1))
             in
-              iff [x', y'] [ifc y' y] [ifq x' x]
-          Single_g _ x -> iff [q !! fromInteger x] [] []
-          Toffoli_g x y z ->
-            let
-              x' = q !! fromInteger x
-              y' = q !! fromInteger y
-              z' = q !! fromInteger z
-            in
-              iff [x', y', z'] [] [ifq x' x, ifq y' y, ifq z' z])
+              iff [x', y'] [ifc y' y] [ifq x' x])
   clean_qbits :: Integer -> Integer -> [Bool] -> (Integer, [(Integer, Integer)])
   clean_qbits m n x = case x of
     [] -> (n, [])
@@ -194,14 +199,6 @@ module Circuit where
   init_circ = Circuit 0 [] 0 0 []
   init' :: [t] -> [(t, Bool)]
   init' = (<$>) (, False)
-  make_subroutine :: [(Integer, Integer)] -> [Gate'] -> [Gate']
-  make_subroutine i = let
-    l = circ_lookup i
-    f gt = case gt of
-      Cnot_g' x y -> Cnot_g' (l x) (l y)
-      Single_g' a x -> Single_g' a (l x)
-      Toffoli_g' x y z -> Toffoli_g' (l x) (l y) (l z) in
-        (<$>) f
   map_help ::
     ([(String, Either Def_tree'' Val)] -> Circuit -> Val -> Either String (Circuit, Val)) ->
     [(String, Either Def_tree'' Val)] ->
@@ -261,20 +258,25 @@ module Circuit where
         Qbit_pointer y -> (c, update_q y q)
         Struct_val y -> ta y
         _ -> t
-  tag_qbits :: [Gate] -> [Bool] -> Either String ([Gate'], [Bool])
+  tag_qbits :: [Gate] -> [Bool] -> Either String ([Gate'], [Bool]) -- TODO: REFACTORISE, REMOVE REPEATED CODE
   tag_qbits g b = case g of
     [] -> Right ([], b)
     h : t -> let
       t' = tag_qbits t in
         case h of
-          Cnot_g x y -> first (Cnot_g' x y :) <$> t' ((update_q y <$> update_q x) b)
-          Single_g f x -> first (Single_g' f x :) <$> t' (update_q x b)
+          G' g' -> first (g' :) <$> (case g' of
+            Cnot_g x y -> t' (comp_all (update_q <$> [x, y]) b)
+            Single_g f x -> t' (update_q x b)
+            Toffoli_g x y z -> t' (comp_all (update_q <$> [x, y, z]) b))
           _ -> Left "Code generation error. Tried to put a non-unitary gate into a subroutine."
   transf_gate :: (Integer -> Integer) -> (Integer -> Integer) -> Gate -> Gate
   transf_gate c q g = case g of
-    Cnot_g x y -> Cnot_g (q x) (q y)
+    G' g' -> G' (transf_gate' q g')
     If_g x y a f z -> If_g (c x) y a f (q <$> z)
     Mea_g x y z -> Mea_g (q x) (c y) z
+  transf_gate' :: (Integer -> Integer) -> Gate' -> Gate'
+  transf_gate' q g = case g of
+    Cnot_g x y -> Cnot_g (q x) (q y)
     Single_g f x -> Single_g f (q x)
     Toffoli_g x y z -> Toffoli_g (q x) (q y) (q z)
   transf_val :: (Integer -> Integer) -> (Integer -> Integer) -> Val -> Val
