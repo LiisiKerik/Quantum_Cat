@@ -24,7 +24,8 @@ module Typing where
     Name'' String [Type] [Int_branch] |
     Single_qbit_def String |
     Str'' [Expression_tree''] |
-    Take''
+    Take'' |
+    Toffoli''
       deriving Show
   data Expression_tree'' = Expression_tree'' Location Expression_branch'' Type deriving Show
   data Int'' = Const_int Integer | Ext_int String | Int_int String deriving Show
@@ -307,7 +308,8 @@ module Typing where
           ["n"],
           Function_type'' (Arr Qbit (Int_variable "n")) (Creg (Int_variable "n")),
           Mes'' (Int_variable "n")),
-        ("Take", [], [], Qbit, Take'')] ++
+        ("Take", [], [], Qbit, Take''),
+        ("Toffoli", [], [], Function_type'' Qbit (Function_type'' Qbit (Function_type'' Qbit Qbit)), Toffoli'')] ++
       (
         (\(x, y) -> (x, [], [], Function_type'' Qbit Qbit, Single_qbit_def y)) <$>
         [("H", "h"), ("S", "s"), ("S'", "sdg"), ("T", "t"), ("T'", "tdg"), ("X", "x"), ("Y", "y"), ("Z", "z")]))

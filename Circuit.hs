@@ -11,9 +11,10 @@ module Circuit where
     Cnot_g Integer Integer |
     If_g Integer Integer Integer [Gate'] [Integer] |
     Mea_g Integer Integer Integer |
-    Single_g String Integer
+    Single_g String Integer |
+    Toffoli_g Integer Integer Integer
       deriving (Eq, Show)
-  data Gate' = Cnot_g' Integer Integer | Single_g' String Integer deriving (Eq, Show) -- TODO: FIND A WAY TO AVOID REPEATED CODE IN GATE, GATE'
+  data Gate' = Cnot_g' Integer Integer | Single_g' String Integer | Toffoli_g' Integer Integer Integer deriving (Eq, Show) -- TODO: FIND A WAY TO AVOID REPEATED CODE IN GATE, GATE'
   data Val =
     Alg_val String [Val] |
     Arr_val [Val] |
@@ -23,6 +24,8 @@ module Circuit where
     Qbit_pointer Integer |
     Struct_val [Val]
       deriving (Eq, Show)
+  add_g :: Circuit -> Gate -> Circuit
+  add_g (Circuit cc c q cg t) h = Circuit cc c q (cg + 1) (h : t)
   add_to_context :: [(String, Either Def_tree'' Val)] -> [String] -> [Val] -> [(String, Either Def_tree'' Val)]
   add_to_context d [] [] = d
   add_to_context d (x : y) (z : w) = (x, Right z) : add_to_context d y w
@@ -40,11 +43,7 @@ module Circuit where
     Cnot'' ->
       func_val
         circ
-        (pure_func
-          (\(Qbit_pointer x) ->
-          \(Circuit cc' c' q' cg' g') ->
-          \(p @ (Qbit_pointer y)) ->
-            Right (Circuit cc' c' q' (cg' + 1) (Cnot_g x y : g'), p)))
+        (pure_func (\(Qbit_pointer x) -> \circ' -> \(p @ (Qbit_pointer y)) -> Right (add_g circ' (Cnot_g x y), p)))
     Field'' n -> func_val circ (\circ' -> \(Struct_val x) -> Right (circ', x !! fromInteger n))
     Fun'' x e' -> Right (circ, Func_val (\d' -> \circ' -> \x' -> circuit' ((x, Right x') : d') circ' e'))
     If_gate'' t _ ->
@@ -101,42 +100,58 @@ module Circuit where
         Global v w -> type_application (zip v t) (zip w n)
         Local -> id) e')
       Right v -> Right (circ, v)
-    Single_qbit_def f -> -- TODO: GENERALISE THIS AND THE CNOT CASE, AND MAYBE IF AND MEASUREMENT?, WITH SOME HELPER FUNCTION?
-      func_val
-        circ
-        (\(Circuit cc' c' q' cg' g') -> \p @ (Qbit_pointer x) -> Right (Circuit cc' c' q' (cg' + 1) (Single_g f x : g'), p))
+-- TODO: GENERALISE THIS AND THE CNOT AND TOFFOLI CASES, AND MAYBE IF AND MEASUREMENT?, WITH SOME HELPER FUNCTION?
+    Single_qbit_def f -> func_val circ (\circ' -> \p @ (Qbit_pointer x) -> Right (add_g circ' (Single_g f x), p))
     Str'' e' -> eval_struct Struct_val d circ e'
     Take'' -> Right (Circuit cc c (q + 1) cg g, Qbit_pointer q)
+    Toffoli'' ->
+      func_val
+        circ
+        (pure_func
+          (\(Qbit_pointer x) ->
+            pure_func (\(Qbit_pointer y) -> \circ' -> \(p @ (Qbit_pointer z)) -> Right (add_g circ' (Toffoli_g x y z), p))))
   clean_cregs :: Integer -> Integer -> [(Integer, Bool)] -> ([Integer], [(Integer, Integer)])
   clean_cregs m n x = case x of
     [] -> ([], [])
     (c, b) : t -> if b then bimap (c :) ((m, n) :) (clean_cregs (m - 1) (n - 1) t) else clean_cregs (m - 1) n t
   clean_gates ::
     Integer -> (([(Integer, Bool)], [Bool]), (Integer, [Gate])) -> (([(Integer, Bool)], [Bool]), (Integer, [Gate]))
+-- TODO: THIS FUNCTION CAN BE REFACTORISED FURTHER. USE ZIPWITH MORE!
   clean_gates cc (r @ ((c, q), (cg, g))) = case g of
     [] -> r
-    h : t -> let
-      add_gate = second (bimap (+ 1) (h :)) in
+    h : t ->
+      let
+        ifc cond n = if cond then id else update_c cc n
+        iff cnd fc fq = if or cnd then (second (bimap (+ 1) (h :)), (comp_all fc, comp_all fq)) else (id, (id, id))
+        ifq cond n = if cond then id else update_q n
+      in
         (\(f', (gc, gq)) -> f' (clean_gates cc ((gc c, gq q), (cg - 1, t)))) (case h of
-          Cnot_g x y -> let
-            y' = q !! fromInteger y in
-              if q !! fromInteger x then
-                (add_gate, (id, if y' then id else update_q y))
-              else
-                second (id, ) (if y' then (add_gate, update_q x) else (id, id))
-          If_g x _ _ _ z -> let
-            z'' = comp_all (update_q <$> z) in
-              if snd (c !! fromInteger (cc - x - 1)) then
-                (add_gate, (id, z''))
-              else
-                if and ((!!) q <$> fromInteger <$> z) then (add_gate, (update_c cc x, z'')) else (id, (id, id))
-          Mea_g x y _ -> let
-            y' = snd(c !! fromInteger (cc - y - 1)) in
-              if q !! fromInteger x then
-                (add_gate, (if y' then id else update_c cc y, id))
-              else
-                second (id, ) (if y' then (add_gate, update_q x) else (id, id))
-          Single_g _ x -> (if q !! fromInteger x then add_gate else id, (id, id)))
+          Cnot_g x y ->
+            let
+              x' = q !! fromInteger x
+              y' = q !! fromInteger y
+            in
+              iff [x', y'] [] [ifq x' x, ifq y' y]
+          If_g x _ _ _ y ->
+            let
+              x' = q !! fromInteger (cc - x - 1)
+              y' = (!!) q <$> fromInteger <$> y
+            in
+              iff (x' : y') [ifc x' x] (zipWith ifq y' y)
+          Mea_g x y _ ->
+            let
+              x' = q !! fromInteger x
+              y' = snd (c !! fromInteger (cc - y - 1))
+            in
+              iff [x', y'] [ifc y' y] [ifq x' x]
+          Single_g _ x -> iff [q !! fromInteger x] [] []
+          Toffoli_g x y z ->
+            let
+              x' = q !! fromInteger x
+              y' = q !! fromInteger y
+              z' = q !! fromInteger z
+            in
+              iff [x', y', z'] [] [ifq x' x, ifq y' y, ifq z' z])
   clean_qbits :: Integer -> Integer -> [Bool] -> (Integer, [(Integer, Integer)])
   clean_qbits m n x = case x of
     [] -> (n, [])
@@ -184,7 +199,8 @@ module Circuit where
     l = circ_lookup i
     f gt = case gt of
       Cnot_g' x y -> Cnot_g' (l x) (l y)
-      Single_g' a x -> Single_g' a (l x) in
+      Single_g' a x -> Single_g' a (l x)
+      Toffoli_g' x y z -> Toffoli_g' (l x) (l y) (l z) in
         (<$>) f
   map_help ::
     ([(String, Either Def_tree'' Val)] -> Circuit -> Val -> Either String (Circuit, Val)) ->
@@ -260,6 +276,7 @@ module Circuit where
     If_g x y a f z -> If_g (c x) y a f (q <$> z)
     Mea_g x y z -> Mea_g (q x) (c y) z
     Single_g f x -> Single_g f (q x)
+    Toffoli_g x y z -> Toffoli_g (q x) (q y) (q z)
   transf_val :: (Integer -> Integer) -> (Integer -> Integer) -> Val -> Val
   transf_val c q x = let
     f = (<$>) (transf_val c q) in

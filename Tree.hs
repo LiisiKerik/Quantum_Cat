@@ -58,6 +58,7 @@
 -- TODO: REMOVE EXCESSIVE PARENTHESES
 -- TODO: REPLACE LAMBDAS CONTAINING PATTERN MATCHES OF ADT-S WITH CASE STATEMENTS FOR SAFETY?
 -- TODO: CHANGE LIFT SO THAT THE ORIGINAL THING THAT WE COPY IS REMOVED?
+-- TODO: CHANGE APPLICATION PARSING; DO NOT REQUIRE BRACKETS
 -----------------------------------------------------------------------------------------------------------------------------
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
