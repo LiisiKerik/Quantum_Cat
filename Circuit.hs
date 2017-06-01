@@ -40,6 +40,11 @@ module Circuit where
         circ
         (pure_func (\(Qbit_pointer x) -> \circ' -> \(p @ (Qbit_pointer y)) -> Right (add_g circ' (Double_g f x y), p)))
     Field'' n -> func_val circ (\circ' -> \(Struct_val x) -> Right (circ', x !! fromInteger n))
+    Foldr''{} ->
+      func_val
+        circ
+        (pure_func
+          (\(Func_val f) -> pure_func' (\x -> Func_val (\d' -> \circ' -> \(Arr_val y) -> foldr_circ d' (f d') x circ' y))))
     Fun'' x e' -> Right (circ, Func_val (\d' -> \circ' -> \x' -> circuit' ((x, Right x') : d') circ' e'))
     If_gate'' t _ ->
       if qtype t then
@@ -84,9 +89,8 @@ module Circuit where
     Map''{} ->
       func_val
         circ
-        (\circ' ->
-        \(Func_val f) ->
-          Right (circ', Func_val (\d' -> \circ'' -> \(Arr_val x) -> second Arr_val <$> (map_help f d' circ'' x))))
+        (pure_func'
+          (\(Func_val f) -> Func_val (\d' -> \circ'' -> \(Arr_val x) -> second Arr_val <$> (map_help (f d') circ'' x))))
     Match'' e' m -> circuit' d circ e' >>= \(circ', v) -> case v of
       Alg_val x y -> let
         (z, e'') = find_case m x in
@@ -188,8 +192,20 @@ module Circuit where
   find_case x y = case x of
     [] -> error("Internal compiler error. Failed algebraic data type matching.")
     Match_case'' z w a : b -> if z == y then (w, a) else find_case b y
+  foldr_circ ::
+    [(String, Either Def_tree'' Val)] ->
+    (Circuit -> Val -> Either String (Circuit, Val)) ->
+    Val ->
+    Circuit ->
+    [Val] ->
+    Either String (Circuit, Val)
+  foldr_circ d f x circ y = case y of
+    [] -> Right (circ, x)
+    h : t -> foldr_circ d f x circ t >>= \(circ', z) -> f circ' h >>= \(_, Func_val g) -> g d circ' z
   func_val :: Circuit -> (Circuit -> Val -> Either String (Circuit, Val)) -> Either String (Circuit, Val)
   func_val circ f = Right (circ, Func_val (return f))
+  func_val' :: Circuit -> Val -> Either String (Circuit, Val)
+  func_val' circ x = Right (circ, x)
   gate_map :: [Bool] -> Integer -> Integer -> ([(Integer, Integer)], Integer)
   gate_map b x y = case b of
     [] -> ([], 0)
@@ -200,15 +216,10 @@ module Circuit where
   init_circ = Circuit 0 [] 0 0 []
   init' :: [t] -> [(t, Bool)]
   init' = (<$>) (, False)
-  map_help ::
-    ([(String, Either Def_tree'' Val)] -> Circuit -> Val -> Either String (Circuit, Val)) ->
-    [(String, Either Def_tree'' Val)] ->
-    Circuit ->
-    [Val] ->
-    Either String (Circuit, [Val])
-  map_help f d c v = case v of
+  map_help :: (Circuit -> Val -> Either String (Circuit, Val)) -> Circuit -> [Val] -> Either String (Circuit, [Val])
+  map_help f c v = case v of
     [] -> Right (c, [])
-    h : t -> f d c h >>= \(c', h') -> second (h' :) <$> (map_help f d c' t) 
+    h : t -> f c h >>= \(c', h') -> second (h' :) <$> (map_help f c' t) 
   mes_help :: Integer -> Integer -> [Gate] -> Integer -> [Val] -> (Integer, (Integer, [Gate]))
   mes_help m gc g n x = case x of
     [] -> (n, (gc, g))
@@ -227,6 +238,8 @@ module Circuit where
         _ -> v
   pure_func :: (Val -> Circuit -> Val -> Either String (Circuit, Val)) -> Circuit -> Val -> Either String (Circuit, Val)
   pure_func f c x = func_val c (f x)
+  pure_func' :: (Val -> Val) -> Circuit -> Val -> Either String (Circuit, Val)
+  pure_func' f c x = func_val' c (f x)
   qtype :: Type -> Bool
   qtype t = case t of
     Arr u _ -> qtype u

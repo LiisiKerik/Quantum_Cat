@@ -15,6 +15,7 @@ module Typing where
     Double_qbit_def String |
     Field'' Integer |
     Fun'' String Expression_tree'' |
+    Foldr'' Type Type Int_branch |
     If_gate'' Type Int_branch |
     Int_expr'' Integer |
     Lift'' Type Int_branch |
@@ -277,7 +278,14 @@ module Typing where
     (\(x, y, z, w, a) -> (x, Def_tree'' Language (Bind (Global y z) w) (Expression_tree'' Language a w))) <$>
     (
       [
-        --("CX", [], [], Function_type'' Qbit (Function_type'' Qbit Qbit), Cnot''),
+        (
+          "Foldr",
+          ["U", "V"],
+          ["n"],
+          Function_type''
+            (Function_type'' (Typevar "U") (Function_type'' (Typevar "V") (Typevar "V")))
+            (Function_type'' (Typevar "V") (Function_type'' (Arr (Typevar "U") (Int_variable "n")) (Typevar "V"))),
+          Foldr'' (Typevar "U") (Typevar "V") (Int_variable "n")),
         (
           "If_gate",
           ["U"],
