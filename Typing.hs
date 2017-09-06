@@ -93,18 +93,6 @@ module Typing where
         ("Int", Star_kind),
         ("Logical", Star_kind),
         ("Maybe", Arrow_kind Star_kind Star_kind)]
-{-
-  repl :: String -> Type_1 -> Type_1 -> Type_1
-  repl a e b = case b of
-    Application_type_1 c d -> Application_type_1 (repl a e c) (repl a e d)
-    Name_type_1 c -> if c == a then e else b
-  repl' :: Map' Type_1 -> Type_1 -> Type_1
-  repl' a b = case b of
-    Application_type_1 c d -> Application_type_1 (repl' a c) (repl' a d)
-    Name_type_1 c -> case Data.Map.lookup c a of
-      Just d -> d
-      Nothing -> b
--}
   repl :: Map' String -> Type_1 -> Type_1
   repl a b = case b of
     Application_type_1 c d -> Application_type_1 (repl a c) (repl a d)
@@ -156,17 +144,6 @@ module Typing where
         Application_type_1 d e -> Application_type_1 (f d) (f e)
         Name_type_1 d -> if d == a then b else c
         _ -> c
-{-
-  type_abstract :: Abstract_tree_2 -> Kinds -> Types -> Err Types
-  type_abstract (Abstract_tree_2 a b c d e) f g =
-    (
-      (\h -> Data.Map.insert a (Abstract_type_1 c d (repl b (Name_type_1 "!") h) empty) g) <$>
-      type_type e (fst (type_kinds d (insert b c f))) Star_kind)
-  type_abstracts :: [Abstract_tree_2] -> Kinds -> Types -> Err Types
-  type_abstracts a b c = case a of
-    [] -> Right c
-    d : e -> type_abstract d b c >>= type_abstracts e b
--}
   type_case ::
     Type_1 ->
     Algebraics ->
@@ -451,18 +428,21 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
       in
         type_kinds_3 g b (insert h ((e, New), Flexible) f) (insert d h c)
   type_type :: (Location_0 -> Location_1) -> Type_0 -> Kinds -> Kind -> Err Type_1
-  type_type l (Type_0 a c) d e = case c of
-    Application_type_0 f g -> type_type' l f d >>= \(h, i) -> case i of
-      Arrow_kind j k ->
-        if k == e then
-          Application_type_1 h <$> type_type l g d j
-        else
-          Left ("Kind mismatch" ++ location' (l a))
-      _ -> Left ("Kind mismatch" ++ location' (l a))
-    Int_type_0 b -> if e == Hash_kind then Right (Int_type_1 b) else Left ("Kind mismatch" ++ location' (l a))
-    Name_type_0 f -> case Data.Map.lookup f d of
-      Just (g, _) -> if g == e then Right (Name_type_1 f) else Left ("Kind mismatch" ++ location' (l a))
-      Nothing -> Left ("Undefined type" ++ f ++ location' (l a))
+  type_type l (Type_0 a c) d e =
+    let
+      x = Left ("Kind mismatch" ++ location' (l a))
+    in case c of
+      Application_type_0 f g -> type_type' l f d >>= \(h, i) -> case i of
+        Arrow_kind j k ->
+          if k == e then
+            Application_type_1 h <$> type_type l g d j
+          else
+            x
+        _ -> x
+      Int_type_0 b -> if e == Hash_kind then Right (Int_type_1 b) else x
+      Name_type_0 f -> case Data.Map.lookup f d of
+        Just (g, _) -> if g == e then Right (Name_type_1 f) else x
+        Nothing -> Left ("Undefined type" ++ f ++ location' (l a))
   type_type' :: (Location_0 -> Location_1) -> Type_0 -> Kinds -> Err (Type_1, Kind)
   type_type' l (Type_0 a c) d = case c of
     Application_type_0 e f -> type_type' l e d >>= \(g, h) -> case h of
@@ -572,10 +552,6 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
     [] -> b
     c : d -> typevars e d (typevar e c b)
   typing :: (Location_0 -> Location_1) -> Tree_5 -> (File, Defs) -> Err (File, Defs)
-{-
-  typing (Tree_4 a b c) d =
-    type_datas a d >>= \(e, f, g) -> type_abstracts b e g >>= \h -> (\(i, j) -> (e, i, j)) <$> type_defs c e (f, h)
--}
   typing k (Tree_5 a c) d =
     (
       type_datas k a d >>=
