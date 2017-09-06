@@ -29,6 +29,14 @@ module Tree where
   data Tree_1 = Tree_1 [Name] Tree_0 deriving Show
   data Type_branch_0 = Application_type_0 Type_0 Type_0 | Int_type_0 Integer | Name_type_0 String deriving Show
   data Type_0 = Type_0 Location_0 Type_branch_0 deriving Show
+  class Get_location t where
+    get_location :: t -> Location_0
+  infixl 4 <&
+  (<&) :: (Location_0 -> t) -> Parser () -> Parser t
+  f <& p = f <$> parse_location <* p
+  infixl 4 <&>
+  (<&>) :: (Location_0 -> t -> u) -> Parser t -> Parser u
+  f <&> p = f <$> parse_location <*> p
   instance Alternative Parser where
     Parser a <|> Parser b = Parser (\c -> left_bind (b <$> update_location c) (a c))
     empty = Parser (return (Left init_location))
@@ -37,15 +45,13 @@ module Tree where
     pure = lift_parser
   instance Functor Parser where
     fmap a (Parser b) = Parser (\c -> first a <$> b c)
+  instance Get_location Pattern_1 where
+    get_location (Pattern_1 a _) = a
+  instance Get_location Type_0 where
+    get_location (Type_0 a _) = a
   instance Monad Parser where
     Parser a >>= b = Parser (a >=> \(c, d) -> parser (b c) d)
     return = lift_parser
-  infixl 4 <&
-  (<&) :: (Location_0 -> t) -> Parser () -> Parser t
-  f <& p = f <$> parse_location <* p
-  infixl 4 <&>
-  (<&>) :: (Location_0 -> t -> u) -> Parser t -> Parser u
-  f <&> p = f <$> parse_location <*> p
   init_location :: Location_0
   init_location = Location_0 0 0
   left_bind :: (t -> Either u v) -> Either t v -> Either u v
