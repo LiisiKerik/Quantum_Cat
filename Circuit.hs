@@ -37,6 +37,8 @@ module Circuit where
     Qbit_expression_3 Integer |
     Struct_expression_3 (Map' Expression_3)
       deriving Show
+  add_g :: Circuit -> Gate' -> Circuit
+  add_g (Circuit cc c q cg t) h = Circuit cc c q (cg + 1) (G' h : t)
   circuit :: Defs -> Expression_2 -> Err (Circuit, Integer)
   circuit a b = circuit' (Left <$> a) init_circ b >>= \(c, d) -> case d of
     Creg_expression_3 e -> Right (c, e)
@@ -45,13 +47,90 @@ module Circuit where
   circuit' a b c =
     let
       f = Right <$> (,) b
+      m = f Crash_expression_3
     in case c of
       Add_Finite_expression_2 d -> f (Add_Finite_expression_3 d)
       Add_Int_expression_2 -> f Add_Int_expression_3
       Algebraic_expression_2 d e -> second (Algebraic_expression_3 d) <$> eval_algebraic a b e
-      Application_expression_2 d e -> undefined
+      Application_expression_2 d e -> circuit' a b d >>= \(g, h) -> circuit' a g e >>= \(i, j) -> case h of
+        Add_Finite_expression_3 k -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Finite_expression_3 l -> Add_Finite_expression'_3 k l
+          _ -> ice)
+        Add_Finite_expression'_3 k l -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Finite_expression_3 n -> Finite_expression_3 (mod (l + n) k)
+          _ -> ice)
+        Add_Int_expression_3 -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Int_expression_3 l -> Add_Int_expression'_3 l
+          _ -> ice)
+        Add_Int_expression'_3 k -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Int_expression_3 n -> Int_expression_3 (k + n)
+          _ -> ice)
+        Convert_Finite_expression_3 k -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Int_expression_3 l -> Finite_expression_3 (mod l k)
+          _ -> ice)
+        Crash_expression_3 -> m
+        Equal_Finite_expression_3 -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Finite_expression_3 k -> Equal_Finite_expression'_3 k
+          _ -> ice)
+        Equal_Finite_expression'_3 k -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Finite_expression_3 l -> Algebraic_expression_3 (show (k == l)) []
+          _ -> ice)
+        Equal_Int_expression_3 -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Int_expression_3 k -> Equal_Int_expression'_3 k
+          _ -> ice)
+        Equal_Int_expression'_3 k -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Int_expression_3 l -> Algebraic_expression_3 (show (k == l)) []
+          _ -> ice)
+        Field_expression_3 k -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Struct_expression_3 l -> unsafe_lookup k l
+          _ -> ice)
+        Function_expression_3 k l n ->
+          let
+            o = case l of
+              Blank_pattern -> k
+              Name_pattern p -> (p, j) : k
+          in case n of
+            Function_expression_2 q r -> Right (i, Function_expression_3 o q r)
+            _ -> circuit' (Prelude.foldl (flip (\(v, u) -> insert v (Right u))) a o) i n
+        Gate_1_expression_3 k -> Right (case j of
+          Crash_expression_3 -> (i, Crash_expression_3)
+          Qbit_expression_3 l -> (add_g i (Single_g k l), j)
+          _ -> ice)
+        Inverse_Finite_expression_3 k -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Finite_expression_3 l -> case div_finite k 1 l of
+            Just n -> Algebraic_expression_3 "Wrap" [Finite_expression_3 n]
+            Nothing -> Algebraic_expression_3 "Nothing" []
+          _ -> ice)
+        Multiply_Finite_expression_3 k -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Finite_expression_3 l -> Multiply_Finite_expression'_3 k l
+          _ -> ice)
+        Multiply_Finite_expression'_3 k l -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Finite_expression_3 n -> Finite_expression_3 (mod (l * n) k)
+          _ -> ice)
+        Multiply_Int_expression_3 -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Int_expression_3 l -> Multiply_Int_expression'_3 l
+          _ -> ice)
+        Multiply_Int_expression'_3 k -> Right (i, case j of
+          Crash_expression_3 -> Crash_expression_3
+          Int_expression_3 n -> Int_expression_3 (k * n)
+          _ -> ice)
+        _ -> ice
       Convert_Finite_expression_2 d -> f (Convert_Finite_expression_3 d)
-      Crash_expression_2 -> f Crash_expression_3
+      Crash_expression_2 -> m
       Equal_Finite_expression_2 -> f Equal_Finite_expression_3
       Equal_Int_expression_2 -> f Equal_Int_expression_3
       Field_expression_2 d -> f (Field_expression_3 d)
@@ -61,26 +140,40 @@ module Circuit where
       Int_expression_2 d -> f (Int_expression_3 d)
       Inverse_Finite_expression_2 d -> f (Inverse_Finite_expression_3 d)
       Match_expression_2 d e -> circuit' a b d >>= \(g, h) -> case h of
-        Algebraic_expression_3 i j -> case Data.Map.lookup i e of
-          Just (Match k l) -> circuit' (eval_match k j a) g l
-          Nothing -> ice
-        Crash_expression_3 -> f Crash_expression_3
+        Algebraic_expression_3 i j ->
+            let
+              Match k l = unsafe_lookup i e
+            in circuit' (eval_match k j a) g l
+        Crash_expression_3 -> m
         _ -> ice
       Multiply_Finite_expression_2 d -> f (Multiply_Finite_expression_3 d)
       Multiply_Int_expression_2 -> f Multiply_Int_expression_3
-      Name_expression_2 d -> case Data.Map.lookup d a of
-        Just h -> case h of
-          Left g -> circuit' a b g
-          Right g -> f g
-        Nothing -> ice
+      Name_expression_2 d -> case unsafe_lookup d a of
+        Left g -> circuit' a b g
+        Right g -> f g
       Struct_expression_2 d -> second Struct_expression_3 <$> eval_struct a b d
       Take_expression_2 -> eval_take b
+  div_finite :: Integer -> Integer -> Integer -> Maybe Integer
+  div_finite a b c = case a of
+    1 -> Just 0
+    _ -> case c of
+      0 -> Nothing
+      _ -> (\d -> div (a * d + b) c) <$> div_finite c (mod (- b) c) (mod a c)
   eval_algebraic :: Map' (Either Expression_2 Expression_3) -> Circuit -> [Expression_2] -> Err (Circuit, [Expression_3])
   eval_algebraic a b c = case c of
     [] -> Right (b, [])
     d : e -> circuit' a b d >>= \(f, g) -> second ((:) g) <$> eval_algebraic a f e
-  eval_match :: [Pattern_0] -> [Expression_3] -> Map' (Either Expression_2 Expression_3) -> Map' (Either Expression_2 Expression_3)
-  eval_match = undefined
+  eval_match ::
+    [Pattern_0] -> [Expression_3] -> Map' (Either Expression_2 Expression_3) -> Map' (Either Expression_2 Expression_3)
+  eval_match a b = case a of
+    [] -> case b of
+      [] -> id
+      _ -> ice
+    d : e -> case b of
+      [] -> ice
+      f : g -> eval_match e g <$> (case d of
+        Blank_pattern -> id
+        Name_pattern c -> insert c (Right f))
   eval_struct :: Map' (Either Expression_2 Expression_3) -> Circuit -> Map' Expression_2 -> Err (Circuit, Map' Expression_3)
   eval_struct a b c = case minViewWithKey c of
     Just ((d, e), f) -> circuit' a b e >>= \(g, h) -> second (insert d h) <$> eval_struct a g f
@@ -89,4 +182,8 @@ module Circuit where
   eval_take (Circuit cc c q cg g) = Right (Circuit cc c (q + 1) cg g, Qbit_expression_3 q)
   init_circ :: Circuit
   init_circ = Circuit 0 [] 0 0 []
+  lookup' :: Eq t => t -> [(t, u)] -> u
+  lookup' a b = case b of
+    [] -> ice
+    (c, d) : e -> if c == a then d else lookup' a e
 -----------------------------------------------------------------------------------------------------------------------------
