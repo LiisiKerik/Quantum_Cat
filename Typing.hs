@@ -22,13 +22,15 @@ module Typing where
     Field_expression_2 String |
     Finite_expression_2 Integer |
     Function_expression_2 Pattern_0 Expression_2 |
+    Gate_1_expression_2 String |
     Int_expression_2 Integer |
     Inverse_Finite_expression_2 Integer |
     Match_expression_2 Expression_2 Matches |
     Multiply_Finite_expression_2 Integer |
     Multiply_Int_expression_2 |
     Name_expression_2 String |
-    Struct_expression_2 (Map' Expression_2)
+    Struct_expression_2 (Map' Expression_2) |
+    Take_expression_2
       deriving Show
   data File = File Kinds Algebraics Constrs Types deriving Show
   data Form_2 = Form_2 String [Type_1] deriving Show
@@ -55,9 +57,7 @@ module Typing where
     Application_type_1 d e -> check_kind j c a d >>= \f -> case f of
       Arrow_kind g h -> check_kind j c a e >>= \i -> if i == g then Right h else Left j
       _ -> Left j
-    Name_type_1 d -> if d == c then Left j else case Data.Map.lookup d a of
-      Just ((e, _), _) -> Right e
-      Nothing -> ice
+    Name_type_1 d -> if d == c then Left j else Right (fst (fst (unsafe_lookup d a)))
     _ -> Right Hash_kind
   constrs :: Map' String
   constrs = fromList [("False", "Logical"), ("Nothing", "Maybe"), ("True", "Logical"), ("Wrap", "Maybe")]
@@ -65,19 +65,27 @@ module Typing where
   defs =
     fromList
       [
-        -- ("Add Int", Add_Int_expression_2),
         ("Add_Int", Add_Int_expression_2),
         ("Crash", Crash_expression_2),
-        -- ("Equal Int", Equal_Int_expression_2),
         ("Equal_Int", Equal_Int_expression_2),
         ("False", Algebraic_expression_2 "False" []),
-        -- ("Multiply Int", Multiply_Int_expression_2),
+        ("H", Gate_1_expression_2 "h"),
         ("Multiply_Int", Multiply_Int_expression_2),
         ("Nothing", Algebraic_expression_2 "Nothing" []),
+        ("S", Gate_1_expression_2 "s"),
+        ("S'", Gate_1_expression_2 "sdg"),
+        ("T", Gate_1_expression_2 "t"),
+        ("T'", Gate_1_expression_2 "tdg"),
+        ("Take", Take_expression_2),
         ("True", Algebraic_expression_2 "True" []),
-        ("Wrap", Function_expression_2 (Name_pattern "x") (Algebraic_expression_2 "Wrap" [Name_expression_2 "x"]))]
+        ("Wrap", Function_expression_2 (Name_pattern "x") (Algebraic_expression_2 "Wrap" [Name_expression_2 "x"])),
+        ("X", Gate_1_expression_2 "x"),
+        ("Y", Gate_1_expression_2 "y"),
+        ("Z", Gate_1_expression_2 "z")]
   function_type :: Type_1 -> Type_1 -> Type_1
   function_type = Application_type_1 <$> Application_type_1 (Name_type_1 "Function")
+  gate_type_1 :: Type_1'
+  gate_type_1 = Basic_type_1 [] (function_type (Name_type_1 "Qbit") (Name_type_1 "Qbit"))
   ice :: t
   ice = error "Internal compiler error."
   init_type_context :: File
@@ -92,7 +100,8 @@ module Typing where
         ("Function", Arrow_kind Star_kind (Arrow_kind Star_kind Star_kind)),
         ("Int", Star_kind),
         ("Logical", Star_kind),
-        ("Maybe", Arrow_kind Star_kind Star_kind)]
+        ("Maybe", Arrow_kind Star_kind Star_kind),
+        ("Qbit", Star_kind)]
   repl :: Map' String -> Type_1 -> Type_1
   repl a b = case b of
     Application_type_1 c d -> Application_type_1 (repl a c) (repl a d)
@@ -113,22 +122,23 @@ module Typing where
         Name_type_1 f -> solvesys' m a f c g
         _ -> Left m
       Name_type_1 e -> case d of
-        Name_type_1 f -> case Data.Map.lookup e a of
-          Just ((h, _), j) -> case Data.Map.lookup f a of
-            Just ((k, _), l) -> if h == k then case j of
-              Fixed -> case l of
-                Fixed -> if e == f then solvesys m a g else Left m
-                Flexible -> solvesys m a (sysrep f c g)
-              Flexible -> solvesys m a (sysrep e d g) else Left m
-            Nothing -> ice
-          Nothing -> ice
+        Name_type_1 f ->
+          let
+            ((h, _), j) = unsafe_lookup e a
+            ((k, _), l) = unsafe_lookup f a
+          in if h == k then case j of
+            Fixed -> case l of
+              Fixed -> if e == f then solvesys m a g else Left m
+              Flexible -> solvesys m a (sysrep f c g)
+            Flexible -> solvesys m a (sysrep e d g) else Left m
         _ -> solvesys' m a e d g
   solvesys' :: String -> Map' ((Kind, Status), Status') -> String -> Type_1 -> [(Type_1, Type_1)] -> Err ()
-  solvesys' h a b c d = case Data.Map.lookup b a of
-    Just ((e, _), f) -> case f of
+  solvesys' h a b c d =
+    let
+      ((e, _), f) = unsafe_lookup b a
+    in case f of
       Fixed -> Left h
       Flexible -> check_kind h b a c >>= \g -> if g == e then solvesys h a (sysrep b c d) else Left h
-    Nothing -> ice
   sysrep :: String -> Type_1 -> [(Type_1, Type_1)] -> [(Type_1, Type_1)]
   sysrep a b =
     let
@@ -362,18 +372,16 @@ module Typing where
     Match_expression_1 c g -> case g of
       [] -> ice
       Match_1 (Name i0 i) _ _ : _ -> case Data.Map.lookup i w of
-        Just (x, _) -> case Data.Map.lookup x v of
-          Just ((y, z, a1), _) ->
-            let
-              (b1, b2) = typevars (flip (++) (show s)) y (empty, f)
-            in
+        Just (x, _) ->
+          let
+            (y, z, a1) = fst (unsafe_lookup x v)
+            (b1, b2) = typevars (flip (++) (show s)) y (empty, f)
+          in (
+            type_expression v w r o (s + 1) b2 h d c (repl b1 a1) >>=
+            \(a0, b0, c0, d0, e0) ->
               (
-                type_expression v w r o (s + 1) b2 h d c (repl b1 a1) >>=
-                \(a0, b0, c0, d0, e0) ->
-                  (
-                    (\(f0, g0, h0, i', j') -> (Match_expression_2 a0 f0, j', i', g0, h0)) <$>
-                    type_cases e v w d r x b1 z g (empty, d0, e0, c0, b0)))
-          Nothing -> ice
+                (\(f0, g0, h0, i', j') -> (Match_expression_2 a0 f0, j', i', g0, h0)) <$>
+                type_cases e v w d r x b1 z g (empty, d0, e0, c0, b0)))
         Nothing -> Left ("Undefined algebraic constructor " ++ i ++ location' (r i0))
     Name_expression_1 c -> case Data.Map.lookup c d of
       Just (g, _) ->
@@ -503,6 +511,7 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
                 (Application_type_1 (Name_type_1 "Function") (Name_type_1 "Int"))
                 (Name_type_1 "Logical")))),
         ("False", Basic_type_1 [] (Name_type_1 "Logical")),
+        ("H", gate_type_1),
         (
           "Inverse_Finite",
           Basic_type_1
@@ -527,12 +536,20 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
               (Application_type_1 (Name_type_1 "Function") (Name_type_1 "Int"))
               (Application_type_1 (Application_type_1 (Name_type_1 "Function") (Name_type_1 "Int")) (Name_type_1 "Int")))),
         ("Nothing", Basic_type_1 [("T", Star_kind)] (Application_type_1 (Name_type_1 "Maybe") (Name_type_1 "T"))),
+        ("S", gate_type_1),
+        ("S'", gate_type_1),
+        ("T", gate_type_1),
+        ("T'", gate_type_1),
+        ("Take", Basic_type_1 [] (Name_type_1 "Qbit")),
         ("True", Basic_type_1 [] (Name_type_1 "Logical")),
         (
           "Wrap",
           Basic_type_1
             [("T", Star_kind)]
-            (function_type (Name_type_1 "T") (Application_type_1 (Name_type_1 "Maybe") (Name_type_1 "T"))))]
+            (function_type (Name_type_1 "T") (Application_type_1 (Name_type_1 "Maybe") (Name_type_1 "T")))),
+        ("X", gate_type_1),
+        ("Y", gate_type_1),
+        ("Z", gate_type_1)]
   typevar ::
     (String -> String) ->
     (String, Kind) ->
@@ -557,4 +574,8 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
       type_datas k a d >>=
       \(File e b h g, f) ->
         (\(i, j) -> (File (rem_old e) (rem_old b) (rem_old h) (rem_old j), i)) <$> type_defs k c (e, b, h) (f, g))
+  unsafe_lookup :: String -> Map' t -> t
+  unsafe_lookup a b = case Data.Map.lookup a b of
+    Just c -> c
+    Nothing -> ice
 -----------------------------------------------------------------------------------------------------------------------------

@@ -51,6 +51,7 @@ module Naming where
           "False",
           "Finite",
           "Function",
+          "H",
           "Int",
           "Inverse_Finite",
           "Logical",
@@ -58,8 +59,17 @@ module Naming where
           "Multiply_Finite",
           "Multiply_Int",
           "Nothing",
+          "Qbit",
+          "S",
+          "S'",
+          "T",
+          "T'",
+          "Take",
           "True",
-          "Wrap"])
+          "Wrap",
+          "X",
+          "Y",
+          "Z"])
   naming :: String -> Tree_2 -> Locations -> Err (Locations, Tree_5)
   naming f a b = naming_1 f a b >>= \(c, d) -> ((,) c) <$> naming_2 f d c
   naming_argument ::
