@@ -44,6 +44,7 @@ module Naming where
         [
           "Add_Finite",
           "Add_Int",
+          "Array",
           "Convert_Finite",
           "Crash",
           "Equal_Finite",
@@ -54,6 +55,7 @@ module Naming where
           "H",
           "Int",
           "Inverse_Finite",
+          "Lift_Array",
           "Logical",
           "Maybe",
           "Multiply_Finite",

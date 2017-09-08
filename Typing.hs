@@ -15,6 +15,7 @@ module Typing where
     Add_Int_expression_2 |
     Algebraic_expression_2 String [Expression_2] |
     Application_expression_2 Expression_2 Expression_2 |
+    Array_expression_2 Integer [Expression_2] |
     Convert_Finite_expression_2 Integer |
     Crash_expression_2 |
     Equal_Finite_expression_2 |
@@ -25,6 +26,7 @@ module Typing where
     Gate_1_expression_2 String |
     Int_expression_2 Integer |
     Inverse_Finite_expression_2 Integer |
+    Lift_Array_expression_2 |
     Match_expression_2 Expression_2 Matches |
     Multiply_Finite_expression_2 Integer |
     Multiply_Int_expression_2 |
@@ -49,9 +51,9 @@ module Typing where
         (
           "Maybe",
           (
-            [("T", Star_kind)],
-            fromList [("Nothing", []), ("Wrap", [Name_type_1 "T"])],
-            Application_type_1 (Name_type_1 "Maybe") (Name_type_1 "T")))]
+            [("U", Star_kind)],
+            fromList [("Nothing", []), ("Wrap", [Name_type_1 "U"])],
+            Application_type_1 (Name_type_1 "Maybe") (Name_type_1 "U")))]
   check_kind :: String -> String -> Map' ((Kind, Status), Status') -> Type_1 -> Err Kind
   check_kind j c a b = case b of
     Application_type_1 d e -> check_kind j c a d >>= \f -> case f of
@@ -82,6 +84,8 @@ module Typing where
         ("X", Gate_1_expression_2 "x"),
         ("Y", Gate_1_expression_2 "y"),
         ("Z", Gate_1_expression_2 "z")]
+  finite_type :: Type_1
+  finite_type = Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N")
   function_type :: Type_1 -> Type_1 -> Type_1
   function_type = Application_type_1 <$> Application_type_1 (Name_type_1 "Function")
   gate_type_1 :: Type_1'
@@ -92,10 +96,13 @@ module Typing where
   init_type_context = File (old kinds) (old algebraics) (old constrs) (old types)
   ins_new :: String -> t -> Map' (t, Status) -> Map' (t, Status)
   ins_new a b = insert a (b, New)
+  int_type :: Type_1
+  int_type = Name_type_1 "Int"
   kinds :: Map' Kind
   kinds =
     Data.Map.fromList
       [
+        ("Array", Arrow_kind Star_kind Star_kind),
         ("Finite", Arrow_kind Hash_kind Star_kind),
         ("Function", Arrow_kind Star_kind (Arrow_kind Star_kind Star_kind)),
         ("Int", Star_kind),
@@ -245,16 +252,7 @@ module Typing where
           (\q ->
             (
               ins_new a (b, fromList ((\(Form_2 r s) -> (r, s)) <$> q), x) p,
-              Prelude.foldl
-                (flip
-                  (\(Form_2 l m) ->
-                    ins_new
-                      l
-                      (Basic_type_1
-                        b
-                        (Prelude.foldr (Application_type_1 <$> Application_type_1 (Name_type_1 "Function")) x m))))
-                e
-                q)) <$>
+              Prelude.foldl (flip (\(Form_2 l m) -> ins_new l (Basic_type_1 b (Prelude.foldr function_type x m)))) e q)) <$>
           type_forms f h g)
       Struct_data_1 h ->
         (
@@ -368,7 +366,7 @@ module Typing where
             Name_pattern i -> ins_new i (Local_type_1 (Name_type_1 (show o))) d)
           g
           (Name_type_1 (show (o + 1))))
-    Int_expression_1 c -> Right (Int_expression_2 c, f, (e, Name_type_1 "Int") : h, o, s)
+    Int_expression_1 c -> Right (Int_expression_2 c, f, (e, int_type) : h, o, s)
     Match_expression_1 c g -> case g of
       [] -> ice
       Match_1 (Name i0 i) _ _ : _ -> case Data.Map.lookup i w of
@@ -468,74 +466,37 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
   types =
     Data.Map.fromList
       [
-        (
-          "Add_Finite",
-          Basic_type_1
-            [("N", Hash_kind)]
-            (Application_type_1
-              (Application_type_1 (Name_type_1 "Function") (Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N")))
-              (Application_type_1
-                (Application_type_1 (Name_type_1 "Function") (Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N")))
-                (Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N"))))),
-        (
-          "Add_Int",
-          Basic_type_1
-            []
-            (Application_type_1
-              (Application_type_1 (Name_type_1 "Function") (Name_type_1 "Int"))
-              (Application_type_1 (Application_type_1 (Name_type_1 "Function") (Name_type_1 "Int")) (Name_type_1 "Int")))),
-        (
-          "Convert_Finite",
-          Basic_type_1
-            [("N", Hash_kind)]
-            (Application_type_1
-              (Application_type_1 (Name_type_1 "Function") (Name_type_1 "Int"))
-              (Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N")))),
-        ("Crash", Basic_type_1 [("T", Star_kind)] (Name_type_1 "T")),
+        ("Add_Finite", Basic_type_1 [("N", Hash_kind)] (function_type finite_type (function_type finite_type finite_type))),
+        ("Add_Int", Basic_type_1 [] (function_type int_type (function_type int_type int_type))),
+        ("Convert_Finite", Basic_type_1 [("N", Hash_kind)] (function_type int_type finite_type)),
+        ("Crash", Basic_type_1 [("U", Star_kind)] (Name_type_1 "U")),
         (
           "Equal_Finite",
-          Basic_type_1
-            [("N", Hash_kind)]
-            (Application_type_1
-              (Application_type_1 (Name_type_1 "Function") (Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N")))
-              (Application_type_1
-                (Application_type_1 (Name_type_1 "Function") (Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N")))
-                (Name_type_1 "Logical")))),
-        (
-          "Equal_Int",
-          Basic_type_1
-            []
-            (Application_type_1
-              (Application_type_1 (Name_type_1 "Function") (Name_type_1 "Int"))
-              (Application_type_1
-                (Application_type_1 (Name_type_1 "Function") (Name_type_1 "Int"))
-                (Name_type_1 "Logical")))),
+          Basic_type_1 [("N", Hash_kind)] (function_type finite_type (function_type finite_type (Name_type_1 "Logical")))),
+        ("Equal_Int", Basic_type_1 [] (function_type int_type (function_type int_type (Name_type_1 "Logical")))),
         ("False", Basic_type_1 [] (Name_type_1 "Logical")),
         ("H", gate_type_1),
         (
           "Inverse_Finite",
           Basic_type_1
             [("N", Hash_kind)]
-            (Application_type_1
-              (Application_type_1 (Name_type_1 "Function") (Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N")))
-              (Application_type_1 (Name_type_1 "Maybe") (Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N"))))),
+            (function_type finite_type (Application_type_1 (Name_type_1 "Maybe") finite_type))),
+        (
+          "Lift_Array",
+          Basic_type_1
+            [("U", Star_kind)]
+            (function_type
+              int_type
+              (function_type (Name_type_1 "U") (Application_type_1 (Name_type_1 "Array") (Name_type_1 "U"))))),
         (
           "Multiply_Finite",
-          Basic_type_1
-            [("N", Hash_kind)]
-            (Application_type_1
-              (Application_type_1 (Name_type_1 "Function") (Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N")))
-              (Application_type_1
-                (Application_type_1 (Name_type_1 "Function") (Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N")))
-                (Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N"))))),
+          Basic_type_1 [("N", Hash_kind)] (function_type finite_type (function_type finite_type finite_type))),
         (
           "Multiply_Int",
           Basic_type_1
             []
-            (Application_type_1
-              (Application_type_1 (Name_type_1 "Function") (Name_type_1 "Int"))
-              (Application_type_1 (Application_type_1 (Name_type_1 "Function") (Name_type_1 "Int")) (Name_type_1 "Int")))),
-        ("Nothing", Basic_type_1 [("T", Star_kind)] (Application_type_1 (Name_type_1 "Maybe") (Name_type_1 "T"))),
+            (function_type int_type (function_type int_type int_type))),
+        ("Nothing", Basic_type_1 [("U", Star_kind)] (Application_type_1 (Name_type_1 "Maybe") (Name_type_1 "U"))),
         ("S", gate_type_1),
         ("S'", gate_type_1),
         ("T", gate_type_1),
@@ -545,8 +506,8 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
         (
           "Wrap",
           Basic_type_1
-            [("T", Star_kind)]
-            (function_type (Name_type_1 "T") (Application_type_1 (Name_type_1 "Maybe") (Name_type_1 "T")))),
+            [("U", Star_kind)]
+            (function_type (Name_type_1 "U") (Application_type_1 (Name_type_1 "Maybe") (Name_type_1 "U")))),
         ("X", gate_type_1),
         ("Y", gate_type_1),
         ("Z", gate_type_1)]
