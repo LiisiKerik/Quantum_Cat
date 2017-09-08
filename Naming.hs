@@ -59,7 +59,6 @@ module Naming where
           "H",
           "Int",
           "Inverse_Finite",
-          "Lift_Array",
           "Logical",
           "Maybe",
           "Multiply_Finite",

@@ -110,5 +110,5 @@ tokenise_parse_naming_typing_eval c (File f g h i) l b =
     \e ->
       (
         naming_expression "input" e c >>=
-        \j -> type_expr' (Location_1 "input") (f, g, h, i) j >>= \a -> codefile <$> circuit l a))
+        \j -> type_expr' (Location_1 "input") (f, g, h, i) j >>= \a -> codefile <$> optimise <$> circuit l a))
 -----------------------------------------------------------------------------------------------------------------------------

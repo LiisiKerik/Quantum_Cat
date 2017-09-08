@@ -4,6 +4,7 @@ module Code where
   import Circuit
   import Data.Bifunctor
   import Data.List
+  import Optimise
   import Typing
   brack :: String -> Integer -> String
   brack x y = x ++ brackets y

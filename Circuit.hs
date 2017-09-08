@@ -18,6 +18,8 @@ module Circuit where
     Add_Int_expression'_3 Integer |
     Algebraic_expression_3 String [Expression_3] |
     Array_expression_3 Integer [Expression_3] |
+    Construct_expression_3 |
+    Construct_expression'_3 Integer |
     Convert_Finite_expression_3 Integer |
     Crash_expression_3 |
     Creg_expression_3 Integer |
@@ -32,8 +34,6 @@ module Circuit where
     Function_expression_3 [(String, Expression_3)] Pattern_0 Expression_2 |
     Int_expression_3 Integer |
     Inverse_Finite_expression_3 Integer |
-    Lift_Array_expression_3 |
-    Lift_Array_expression'_3 Integer |
     Multiply_Finite_expression_3 Integer |
     Multiply_Finite_expression'_3 Integer Integer |
     Multiply_Int_expression_3 |
@@ -48,7 +48,7 @@ module Circuit where
   add_g :: Circuit -> Gate' -> Circuit
   add_g (Circuit cc c q cg t) h = Circuit cc c q (cg + 1) (Unitary h : t)
   circuit :: Defs -> Expression_2 -> Err (Circuit, Integer)
-  circuit a b = circuit' (Left <$> a) init_circ b >>= \(c, d) -> case d of
+  circuit a b = circuit' (Left <$> a) (Circuit 0 [] 0 0 []) b >>= \(c, d) -> case d of
     Crash_expression_3 -> code_err "Crash."
     Creg_expression_3 e -> Right (c, e)
     _ -> ice
@@ -81,6 +81,11 @@ module Circuit where
           Crash_expression_3 -> Crash_expression_3
           Int_expression_3 n -> Int_expression_3 (k + n)
           _ -> ice)
+        Construct_expression_3 -> case j of
+          Crash_expression_3 -> r Crash_expression_3
+          Int_expression_3 k -> if k < 0 then code_err "Array applied to a negative Int." else r (Construct_expression'_3 k)
+          _ -> ice
+        Construct_expression'_3 k -> second (Array_expression_3 k) <$> construct_array a i 0 k e
         Convert_Finite_expression_3 k -> r (case j of
           Crash_expression_3 -> Crash_expression_3
           Int_expression_3 l -> Finite_expression_3 (mod l k)
@@ -128,12 +133,6 @@ module Circuit where
             Just n -> Algebraic_expression_3 "Wrap" [Finite_expression_3 n]
             Nothing -> Algebraic_expression_3 "Nothing" []
           _ -> ice)
-        Lift_Array_expression_3 -> case j of
-          Crash_expression_3 -> r Crash_expression_3
-          Int_expression_3 k ->
-            if k < 0 then code_err "Lift_Array applied to a negative Int." else r (Lift_Array_expression'_3 k)
-          _ -> ice
-        Lift_Array_expression'_3 k -> Right (second (Array_expression_3 k) (replicate_circuit i k (cleanup (i, j))))
         Multiply_Finite_expression_3 k -> r (case j of
           Crash_expression_3 -> Crash_expression_3
           Finite_expression_3 l -> Multiply_Finite_expression'_3 k l
@@ -167,7 +166,7 @@ module Circuit where
           Qbit_expression_3 n -> (add_g i (Toffoli_gate k l n), j)
           _ -> ice)
         _ -> ice
-      Array_expression_2 d e -> second (Array_expression_3 d) <$> eval_list a b e
+      Construct_expression_2 -> f Construct_expression_3
       Convert_Finite_expression_2 d -> f (Convert_Finite_expression_3 d)
       Crash_expression_2 -> m
       Double_expression_2 d -> f (Double_expression_3 d)
@@ -178,7 +177,6 @@ module Circuit where
       Function_expression_2 d e -> f (Function_expression_3 [] d e)
       Int_expression_2 d -> f (Int_expression_3 d)
       Inverse_Finite_expression_2 d -> f (Inverse_Finite_expression_3 d)
-      Lift_Array_expression_2 -> f Lift_Array_expression_3
       Match_expression_2 d e -> circuit' a b d >>= \(g, h) -> case h of
         Algebraic_expression_3 i j ->
             let
@@ -195,70 +193,17 @@ module Circuit where
       Struct_expression_2 d -> second Struct_expression_3 <$> eval_struct a b d
       Take_expression_2 -> eval_take b
       Toffoli_expression_2 -> f Toffoli_expression_3
-  clean_gates ::
-    Integer -> (([(Integer, Bool)], [Bool]), (Integer, [Gate])) -> (([(Integer, Bool)], [Bool]), (Integer, [Gate]))
--- TODO: THIS FUNCTION CAN BE REFACTORISED FURTHER. USE ZIPWITH MORE!
-  clean_gates cc (r @ ((c, q), (cg, g))) = case g of
-    [] -> r
-    h : t ->
-      let
-        ifc cond n = if cond then id else update_c cc n
-        iff cnd fc fq = if or cnd then (second (bimap ((+) 1) ((:) h)), (comp_all fc, comp_all fq)) else (id, (id, id))
-        ifq cond n = if cond then id else update_q n
-      in
-        (\(f', (gc, gq)) -> f' (clean_gates cc ((gc c, gq q), (cg - 1, t)))) (case h of
-          Unitary g' -> case g' of
-            Double_gate _ x y ->
-              let
-                x' = q !! fromInteger x
-                y' = q !! fromInteger y
-              in
-                iff [x', y'] [] [ifq x' x, ifq y' y]
-            Single_gate _ x -> iff [q !! fromInteger x] [] []
-            Toffoli_gate x y z ->
-              let
-                x' = q !! fromInteger x
-                y' = q !! fromInteger y
-                z' = q !! fromInteger z
-              in
-                iff [x', y', z'] [] [ifq x' x, ifq y' y, ifq z' z]
-          If_g x _ _ _ y ->
-            let
-              x' = q !! fromInteger (cc - x - 1)
-              y' = (!!) q <$> fromInteger <$> y
-            in
-              iff (x' : y') [ifc x' x] (zipWith ifq y' y)
-          Mea_g x y _ ->
-            let
-              x' = q !! fromInteger x
-              y' = snd (c !! fromInteger (cc - y - 1))
-            in
-              iff [x', y'] [ifc y' y] [ifq x' x])
-  clean_cregs :: Integer -> Integer -> [(Integer, Bool)] -> ([Integer], [(Integer, Integer)])
-  clean_cregs m n x = case x of
-    [] -> ([], [])
-    (c, b) : t -> if b then bimap (c :) ((m, n) :) (clean_cregs (m - 1) (n - 1) t) else clean_cregs (m - 1) n t
-  clean_qbits :: Integer -> Integer -> [Bool] -> (Integer, [(Integer, Integer)])
-  clean_qbits m n x = case x of
-    [] -> (n, [])
-    h : t -> if h then second ((m, n) :) (clean_qbits (m + 1) (n + 1) t) else clean_qbits (m + 1) n t
-  cleanup :: (Circuit, Expression_3) -> (Circuit, Expression_3)
-  cleanup (Circuit cc c q cg g, x) = let
-    ((c'', q''), (cg', g')) = clean_gates cc (tag_circ cc (init' c, replicate (fromInteger q) False) x, (cg, g))
-    cc3 = count_cregs c''
-    (c', cmap) = clean_cregs (cc - 1) (cc3 - 1) c''
-    (qc, qmap) = clean_qbits 0 0 q''
-    fc = flip lookup' cmap
-    fq = flip lookup' qmap in
-      (Circuit cc3 c' qc cg' (transf_gate fc fq <$> g'), transf_val fc fq x)
   code_err :: String -> Err t
   code_err = Left <$> (++) "Code generation error. "
-  comp_all :: [t -> t] -> t -> t
-  comp_all = Prelude.foldr (<$>) id
-  count_cregs :: [(t, Bool)] -> Integer
-  count_cregs x = case x of
-    [] -> 0
-    (_, h) : t -> (if h then (+ 1) else id) (count_cregs t)
+  construct_array ::
+    Map' (Either Expression_2 Expression_3) -> Circuit -> Integer -> Integer -> Expression_2 -> Err (Circuit, [Expression_3])
+  construct_array d a i i_fin c =
+    if i == i_fin then
+      Right (a, [])
+    else
+      (
+        circuit' d a (Application_expression_2 c (Int_expression_2 i)) >>=
+        \(b, e) -> second ((:) e) <$> construct_array d b (i + 1) i_fin c)
   div_finite :: Integer -> Integer -> Integer -> Maybe Integer
   div_finite a b c = case a of
     1 -> Just 0
@@ -286,96 +231,4 @@ module Circuit where
     Nothing -> Right (b, empty)
   eval_take :: Circuit -> Err (Circuit, Expression_3)
   eval_take (Circuit cc c q cg g) = Right (Circuit cc c (q + 1) cg g, Qbit_expression_3 q)
-  init' :: [t] -> [(t, Bool)]
-  init' = (<$>) (flip (,) False)
-  init_circ :: Circuit
-  init_circ = Circuit 0 [] 0 0 []
-  lookup' :: Eq t => t -> [(t, u)] -> u
-  lookup' a b = case b of
-    [] -> ice
-    (c, d) : e -> if c == a then d else lookup' a e
-  offset' :: Functor f => Integer -> Integer -> f Expression_3 -> f Expression_3
-  offset' c q x = fmap (offset_val c q) x
-  offset_val :: Integer -> Integer -> Expression_3 -> Expression_3
-  offset_val c q v =
-    let
-      offset_list = offset' c q
-    in case v of
-      Algebraic_expression_3 x y -> Algebraic_expression_3 x (offset_list y)
-      Array_expression_3 n x -> Array_expression_3 n (offset_list x)
-      Creg_expression_3 x -> Creg_expression_3 (x + c)
-      Double_expression'_3 n x -> Double_expression'_3 n (x + q)
-      Qbit_expression_3 x -> Qbit_expression_3 (x + q)
-      Struct_expression_3 x -> Struct_expression_3 (offset' c q x)
-      Toffoli_expression'_3 x -> Toffoli_expression'_3 (x + q)
-      Toffoli_expression''_3 x y -> Toffoli_expression''_3 (x + q) (y + q)
-      _ -> v
-  replicate_circuit :: Circuit -> Integer -> (Circuit, Expression_3) -> (Circuit, [Expression_3])
-  replicate_circuit(circ @ (Circuit cc c q gc g)) n (circ' @ (Circuit cc' c' q' gc' g'), v) =
-    if n == 0 then
-      (circ, [])
-    else
-      second
-        ((:) (offset_val cc q v))
-        (replicate_circuit
-          (Circuit (cc + cc') (c' ++ c) (q + q') (gc + gc') ((transf_gate (+ cc) (+ q) <$> g') ++ g))
-          (n - 1)
-          (circ', v))
-  tag_arr :: Integer -> ([(Integer, Bool)], [Bool]) -> [Expression_3] -> ([(Integer, Bool)], [Bool])
-  tag_arr cc t x = case x of
-    [] -> t
-    y : z -> tag_arr cc (tag_circ cc t y) z
-  tag_circ :: Integer -> ([(Integer, Bool)], [Bool]) -> Expression_3 -> ([(Integer, Bool)], [Bool])
-  tag_circ cc (t @ (c, q)) x =
-    let
-      ta = tag_arr cc t
-      uq = flip update_q q
-    in case x of
-      Algebraic_expression_3 _ a -> ta a
-      Array_expression_3 _ a -> ta a
-      Creg_expression_3 a -> (update_c cc a c, q)
-      Double_expression'_3 _ a -> (c, uq a)
-      Qbit_expression_3 a -> (c, uq a)
-      Struct_expression_3 a -> tag_map cc t a
-      Toffoli_expression'_3 a -> (c, uq a)
-      Toffoli_expression''_3 a b -> (c, update_q b (uq a))
-      _ -> t
-  tag_map :: Integer -> ([(Integer, Bool)], [Bool]) -> Map' Expression_3 -> ([(Integer, Bool)], [Bool])
-  tag_map cc t x = case minViewWithKey x of
-    Just (y, z) -> tag_map cc (tag_circ cc t (snd y)) z
-    Nothing -> t
-  transf_gate :: (Integer -> Integer) -> (Integer -> Integer) -> Gate -> Gate
-  transf_gate c q g = case g of
-    Unitary g' -> Unitary (case g' of
-      Double_gate f x y -> Double_gate f (q x) (q y)
-      Single_gate f x -> Single_gate f (q x)
-      Toffoli_gate x y z -> Toffoli_gate (q x) (q y) (q z))
-    If_g x y a f z -> If_g (c x) y a f (q <$> z)
-    Mea_g x y z -> Mea_g (q x) (c y) z
-  transf_val :: (Integer -> Integer) -> (Integer -> Integer) -> Expression_3 -> Expression_3
-  transf_val c q x =
-    let
-      f = transf_val' c q
-    in case x of
-      Algebraic_expression_3 y z -> Algebraic_expression_3 y (f z)
-      Array_expression_3 n y -> Array_expression_3 n (f y)
-      Creg_expression_3 y -> Creg_expression_3 (c y)
-      Double_expression'_3 n y -> Double_expression'_3 n (q y)
-      Qbit_expression_3 y -> Qbit_expression_3 (q y)
-      Struct_expression_3 y -> Struct_expression_3 (transf_val' c q y)
-      Toffoli_expression'_3 y -> Toffoli_expression'_3 (q y)
-      Toffoli_expression''_3 y z -> Toffoli_expression''_3 (q y) (q z)
-      _ -> x
-  transf_val' :: Functor f => (Integer -> Integer) -> (Integer -> Integer) -> f Expression_3 -> f Expression_3
-  transf_val' c q = fmap (transf_val c q)
-  update_c :: Integer -> Integer -> [(Integer, Bool)] -> [(Integer, Bool)]
-  update_c x y = update_c' (x - y - 1)
-  update_c' :: Integer -> [(Integer, Bool)] -> [(Integer, Bool)]
-  update_c' x y = case y of
-    [] -> ice
-    z @ (w, _) : a -> if x == 0 then (w, True) : a else z : update_c' (x - 1) a
-  update_q :: Integer -> [Bool] -> [Bool]
-  update_q x y = case y of
-    [] -> ice
-    z : w -> if x == 0 then True : w else z : update_q (x - 1) w
 -----------------------------------------------------------------------------------------------------------------------------
