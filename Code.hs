@@ -4,18 +4,19 @@ module Code where
   import Circuit
   import Data.Bifunctor
   import Data.List
+  import Typing
   brack :: String -> Integer -> String
   brack x y = x ++ brackets y
   brack_q :: Integer -> String
   brack_q = brack "q"
   brackets :: Integer -> String
   brackets x = "[" ++ show x ++ "]"
-  codefile :: (Circuit, Integer) -> Either String String
+  codefile :: (Circuit, Integer) -> String
   codefile (Circuit _ c q _ g, x) =
     let
       (cr, name_map) = cregs 0 0 (reverse c) x
     in
-      Right (newl ("include \"qelib1.inc\"" : create_reg "q" "q" q ++ cr ++ encode_gates 0 name_map (reverse g)) ++ ";")
+      newl ("include \"qelib1.inc\"" : create_reg "q" "q" q ++ cr ++ encode_gates 0 name_map (reverse g)) ++ ";"
   cmm :: [String] -> String
   cmm = intercalate ", "
   count_non_empty_regs :: [Integer] -> Integer
@@ -30,7 +31,7 @@ module Code where
   creg_help a n m = bimap (create_reg "c" a n ++) ((m, a) :)
   cregs :: Integer -> Integer -> [Integer] -> Integer -> ([String], [(Integer, String)])
   cregs m n c r = case c of
-    [] -> error ("Internal compiler error. Failed to find the result register.")
+    [] -> ice
     h : t ->
       (\(a, x) -> creg_help a h m x)
         (if m == r then ("r", cregs' (m + 1) n t) else (rgmnt_c n, cregs (m + 1) (n + 1) t r))
@@ -71,7 +72,7 @@ module Code where
       print_gate (case g of
         Double_gate f x y -> (f, [x, y])
         Single_gate f x -> (f, [x])
-        Toffoli_g x y z -> ("ccx", [x, y, z]))
+        Toffoli_gate x y z -> ("ccx", [x, y, z]))
   newl :: [String] -> String
   newl = intercalate ";\n"
   rgmnt :: String -> Integer -> String

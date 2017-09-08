@@ -294,7 +294,7 @@ module Typing where
   type_def_2 :: (Location_0 -> Location_1) -> Def_4 -> (Algebraics, Constrs, Types) -> Defs -> Err Defs
   type_def_2 j a (d, l, k) c = case a of
     Basic_def_4 r e _ b h i ->
-      flip (insert e) c <$> type_expr ("in function " ++ e ++ location' (j r)) h j ((\g -> (g, Fixed)) <$> b, d, l, k) i
+      flip (insert e) c <$> type_expr ("function " ++ e ++ location (j r)) h j ((\g -> (g, Fixed)) <$> b, d, l, k) i
   type_defs ::
     (Location_0 -> Location_1) -> [Def_2] -> (Kinds, Algebraics, Constrs) -> (Defs, Types) -> Err (Defs, Types)
   type_defs h a (b, i, j) (c, d) = type_defs_1 h a b d >>= \(g, e) -> (\f -> (f, e)) <$> type_defs_2 h g (i, j, e) c
@@ -316,14 +316,9 @@ module Typing where
     Expression_1 ->
     Err Expression_2
   type_expr k h a (b, c, d, e) f =
-    type_expression c d a 0 0 b [] e f h >>= \(g, i, j, _, _) -> g <$ solvesys ("Type error " ++ k) i j
+    type_expression c d a 0 0 b [] e f h >>= \(g, i, j, _, _) -> g <$ solvesys ("Type error in " ++ k ++ ".") i j
   type_expr' :: (Location_0 -> Location_1) -> (Kinds, Algebraics, Constrs, Types) -> Expression_1 -> Err Expression_2
-  type_expr' a (b, c, d, e) =
-    type_expr
-      "in expression."
-      (Name_type_1 "!")
-      a
-      (insert "!" ((Star_kind, New), Flexible) ((\g -> (g, Fixed)) <$> b), c, d, e)
+  type_expr' a (b, c, d, e) = type_expr "input" (Name_type_1 "Creg") a (flip (,) Fixed <$> b, c, d, e)
   type_expression ::
     Algebraics ->
     Constrs ->

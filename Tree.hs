@@ -138,7 +138,7 @@ module Tree where
   parse_error :: (Location_0 -> Location_1) -> Location_0 -> Err t
   parse_error a b = Left ("Parse error" ++ location' (a b))
   parse_expression :: String -> Err Expression_0
-  parse_expression = parse parse_expression' (Location_1 "expression")
+  parse_expression = parse parse_expression' (Location_1 "input")
   parse_expression' :: Parser Expression_0
   parse_expression' = Expression_0 <&> parse_expression_branch
   parse_expression_branch :: Parser Expression_branch_0

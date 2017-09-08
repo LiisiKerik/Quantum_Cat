@@ -9,7 +9,7 @@ module Circuit where
   import Typing
   data Circuit = Circuit Integer [Integer] Integer Integer [Gate] deriving Show
   data Gate = G' Gate' | If_g Integer Integer Integer [Gate'] [Integer] | Mea_g Integer Integer Integer deriving Show
-  data Gate' = Double_gate String Integer Integer | Single_gate String Integer | Toffoli_g Integer Integer Integer
+  data Gate' = Double_gate String Integer Integer | Single_gate String Integer | Toffoli_gate Integer Integer Integer
     deriving Show
   data Expression_3 =
     Add_Finite_expression_3 Integer |
@@ -48,7 +48,7 @@ module Circuit where
   circuit a b = circuit' (Left <$> a) init_circ b >>= \(c, d) -> case d of
     Crash_expression_3 -> code_err "Crash."
     Creg_expression_3 e -> Right (c, e)
-    _ -> code_err "The output should be a classical register."
+    _ -> ice
   circuit' :: Map' (Either Expression_2 Expression_3) -> Circuit -> Expression_2 -> Err (Circuit, Expression_3)
   circuit' a b c =
     let
@@ -199,7 +199,7 @@ module Circuit where
               in
                 iff [x', y'] [] [ifq x' x, ifq y' y]
             Single_gate _ x -> iff [q !! fromInteger x] [] []
-            Toffoli_g x y z ->
+            Toffoli_gate x y z ->
               let
                 x' = q !! fromInteger x
                 y' = q !! fromInteger y
@@ -288,6 +288,7 @@ module Circuit where
       Algebraic_expression_3 x y -> Algebraic_expression_3 x (offset_list y)
       Array_expression_3 n x -> Array_expression_3 n (offset_list x)
       Creg_expression_3 x -> Creg_expression_3 (x + c)
+      Double_expression'_3 n x -> Double_expression'_3 n (x + q)
       Qbit_expression_3 x -> Qbit_expression_3 (x + q)
       Struct_expression_3 x -> Struct_expression_3 (offset' c q x)
       _ -> v
@@ -315,6 +316,7 @@ module Circuit where
       Algebraic_expression_3 _ a -> ta a
       Array_expression_3 _ a -> ta a
       Creg_expression_3 a -> (update_c cc a c, q)
+      Double_expression'_3 _ a -> (c, update_q a q)
       Qbit_expression_3 a -> (c, update_q a q)
       Struct_expression_3 a -> tag_map cc t a
       _ -> t
@@ -331,7 +333,7 @@ module Circuit where
   transf_gate' q g = case g of
     Double_gate f x y -> Double_gate f (q x) (q y)
     Single_gate f x -> Single_gate f (q x)
-    Toffoli_g x y z -> Toffoli_g (q x) (q y) (q z)
+    Toffoli_gate x y z -> Toffoli_gate (q x) (q y) (q z)
   transf_val :: (Integer -> Integer) -> (Integer -> Integer) -> Expression_3 -> Expression_3
   transf_val c q x =
     let
@@ -340,6 +342,7 @@ module Circuit where
       Algebraic_expression_3 y z -> Algebraic_expression_3 y (f z)
       Array_expression_3 n y -> Array_expression_3 n (f y)
       Creg_expression_3 y -> Creg_expression_3 (c y)
+      Double_expression'_3 n y -> Double_expression'_3 n (q y)
       Qbit_expression_3 y -> Qbit_expression_3 (q y)
       Struct_expression_3 y -> Struct_expression_3 (transf_val' c q y)
       _ -> x
