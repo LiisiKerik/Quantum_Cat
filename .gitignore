@@ -5,3 +5,5 @@
 *.o
 *.pdf
 *.qasm
+*.tdo
+*.toc
