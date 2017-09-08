@@ -8,7 +8,7 @@ module Circuit where
   import Tree
   import Typing
   data Circuit = Circuit Integer [Integer] Integer Integer [Gate] deriving Show
-  data Gate = G' Gate' | If_g Integer Integer Integer [Gate'] [Integer] | Mea_g Integer Integer Integer deriving Show
+  data Gate = Unitary Gate' | If_g Integer Integer Integer [Gate'] [Integer] | Mea_g Integer Integer Integer deriving Show
   data Gate' = Double_gate String Integer Integer | Single_gate String Integer | Toffoli_gate Integer Integer Integer
     deriving Show
   data Expression_3 =
@@ -40,10 +40,13 @@ module Circuit where
     Multiply_Int_expression'_3 Integer |
     Qbit_expression_3 Integer |
     Single_expression_3 String |
-    Struct_expression_3 (Map' Expression_3)
+    Struct_expression_3 (Map' Expression_3) |
+    Toffoli_expression_3 |
+    Toffoli_expression'_3 Integer |
+    Toffoli_expression''_3 Integer Integer
       deriving Show
   add_g :: Circuit -> Gate' -> Circuit
-  add_g (Circuit cc c q cg t) h = Circuit cc c q (cg + 1) (G' h : t)
+  add_g (Circuit cc c q cg t) h = Circuit cc c q (cg + 1) (Unitary h : t)
   circuit :: Defs -> Expression_2 -> Err (Circuit, Integer)
   circuit a b = circuit' (Left <$> a) init_circ b >>= \(c, d) -> case d of
     Crash_expression_3 -> code_err "Crash."
@@ -151,6 +154,18 @@ module Circuit where
           Crash_expression_3 -> (i, Crash_expression_3)
           Qbit_expression_3 l -> (add_g i (Single_gate k l), j)
           _ -> ice)
+        Toffoli_expression_3 -> r (case j of
+          Crash_expression_3 -> Crash_expression_3
+          Qbit_expression_3 k -> Toffoli_expression'_3 k
+          _ -> ice)
+        Toffoli_expression'_3 k -> r (case j of
+          Crash_expression_3 -> Crash_expression_3
+          Qbit_expression_3 l -> Toffoli_expression''_3 k l
+          _ -> ice)
+        Toffoli_expression''_3 k l -> Right (case j of
+          Crash_expression_3 -> (i, Crash_expression_3)
+          Qbit_expression_3 n -> (add_g i (Toffoli_gate k l n), j)
+          _ -> ice)
         _ -> ice
       Array_expression_2 d e -> second (Array_expression_3 d) <$> eval_list a b e
       Convert_Finite_expression_2 d -> f (Convert_Finite_expression_3 d)
@@ -179,6 +194,7 @@ module Circuit where
       Single_expression_2 d -> f (Single_expression_3 d)
       Struct_expression_2 d -> second Struct_expression_3 <$> eval_struct a b d
       Take_expression_2 -> eval_take b
+      Toffoli_expression_2 -> f Toffoli_expression_3
   clean_gates ::
     Integer -> (([(Integer, Bool)], [Bool]), (Integer, [Gate])) -> (([(Integer, Bool)], [Bool]), (Integer, [Gate]))
 -- TODO: THIS FUNCTION CAN BE REFACTORISED FURTHER. USE ZIPWITH MORE!
@@ -191,7 +207,7 @@ module Circuit where
         ifq cond n = if cond then id else update_q n
       in
         (\(f', (gc, gq)) -> f' (clean_gates cc ((gc c, gq q), (cg - 1, t)))) (case h of
-          G' g' -> case g' of
+          Unitary g' -> case g' of
             Double_gate _ x y ->
               let
                 x' = q !! fromInteger x
@@ -291,6 +307,8 @@ module Circuit where
       Double_expression'_3 n x -> Double_expression'_3 n (x + q)
       Qbit_expression_3 x -> Qbit_expression_3 (x + q)
       Struct_expression_3 x -> Struct_expression_3 (offset' c q x)
+      Toffoli_expression'_3 x -> Toffoli_expression'_3 (x + q)
+      Toffoli_expression''_3 x y -> Toffoli_expression''_3 (x + q) (y + q)
       _ -> v
   replicate_circuit :: Circuit -> Integer -> Circuit -> Expression_3 -> (Circuit, [Expression_3])
   replicate_circuit(circ @ (Circuit cc c q gc g)) n (circ' @ (Circuit cc' c' q' gc' g')) v =
@@ -312,13 +330,16 @@ module Circuit where
   tag_circ cc (t @ (c, q)) x =
     let
       ta = tag_arr cc t
+      uq = flip update_q q
     in case x of
       Algebraic_expression_3 _ a -> ta a
       Array_expression_3 _ a -> ta a
       Creg_expression_3 a -> (update_c cc a c, q)
-      Double_expression'_3 _ a -> (c, update_q a q)
-      Qbit_expression_3 a -> (c, update_q a q)
+      Double_expression'_3 _ a -> (c, uq a)
+      Qbit_expression_3 a -> (c, uq a)
       Struct_expression_3 a -> tag_map cc t a
+      Toffoli_expression'_3 a -> (c, uq a)
+      Toffoli_expression''_3 a b -> (c, update_q b (uq a))
       _ -> t
   tag_map :: Integer -> ([(Integer, Bool)], [Bool]) -> Map' Expression_3 -> ([(Integer, Bool)], [Bool])
   tag_map cc t x = case minViewWithKey x of
@@ -326,14 +347,12 @@ module Circuit where
     Nothing -> t
   transf_gate :: (Integer -> Integer) -> (Integer -> Integer) -> Gate -> Gate
   transf_gate c q g = case g of
-    G' g' -> G' (transf_gate' q g')
+    Unitary g' -> Unitary (case g' of
+      Double_gate f x y -> Double_gate f (q x) (q y)
+      Single_gate f x -> Single_gate f (q x)
+      Toffoli_gate x y z -> Toffoli_gate (q x) (q y) (q z))
     If_g x y a f z -> If_g (c x) y a f (q <$> z)
     Mea_g x y z -> Mea_g (q x) (c y) z
-  transf_gate' :: (Integer -> Integer) -> Gate' -> Gate'
-  transf_gate' q g = case g of
-    Double_gate f x y -> Double_gate f (q x) (q y)
-    Single_gate f x -> Single_gate f (q x)
-    Toffoli_gate x y z -> Toffoli_gate (q x) (q y) (q z)
   transf_val :: (Integer -> Integer) -> (Integer -> Integer) -> Expression_3 -> Expression_3
   transf_val c q x =
     let
@@ -345,6 +364,8 @@ module Circuit where
       Double_expression'_3 n y -> Double_expression'_3 n (q y)
       Qbit_expression_3 y -> Qbit_expression_3 (q y)
       Struct_expression_3 y -> Struct_expression_3 (transf_val' c q y)
+      Toffoli_expression'_3 y -> Toffoli_expression'_3 (q y)
+      Toffoli_expression''_3 y z -> Toffoli_expression''_3 (q y) (q z)
       _ -> x
   transf_val' :: Functor f => (Integer -> Integer) -> (Integer -> Integer) -> f Expression_3 -> f Expression_3
   transf_val' c q = fmap (transf_val c q)

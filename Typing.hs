@@ -33,7 +33,8 @@ module Typing where
     Name_expression_2 String |
     Single_expression_2 String |
     Struct_expression_2 (Map' Expression_2) |
-    Take_expression_2
+    Take_expression_2 |
+    Toffoli_expression_2
       deriving Show
   data File = File Kinds Algebraics Constrs Types deriving Show
   data Form_2 = Form_2 String [Type_1] deriving Show
@@ -84,6 +85,7 @@ module Typing where
         ("T", Single_expression_2 "t"),
         ("T'", Single_expression_2 "tdg"),
         ("Take", Take_expression_2),
+        ("Toffoli", Toffoli_expression_2),
         ("True", Algebraic_expression_2 "True" []),
         ("Wrap", Function_expression_2 (Name_pattern "x") (Algebraic_expression_2 "Wrap" [Name_expression_2 "x"])),
         ("X", Single_expression_2 "x"),
@@ -110,6 +112,7 @@ module Typing where
     Data.Map.fromList
       [
         ("Array", Arrow_kind Star_kind Star_kind),
+        ("Creg", Star_kind),
         ("Finite", Arrow_kind Hash_kind Star_kind),
         ("Function", Arrow_kind Star_kind (Arrow_kind Star_kind Star_kind)),
         ("Int", Star_kind),
@@ -510,6 +513,7 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
         ("T", gate_type_1),
         ("T'", gate_type_1),
         ("Take", Basic_type_1 [] qbit_type),
+        ("Toffoli", Basic_type_1 [] (function_type qbit_type (function_type qbit_type (function_type qbit_type qbit_type)))),
         ("True", Basic_type_1 [] (Name_type_1 "Logical")),
         (
           "Wrap",

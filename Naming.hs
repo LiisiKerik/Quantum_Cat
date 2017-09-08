@@ -71,6 +71,7 @@ module Naming where
           "T",
           "T'",
           "Take",
+          "Toffoli",
           "True",
           "Wrap",
           "X",

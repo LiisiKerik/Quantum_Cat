@@ -41,7 +41,7 @@ module Code where
     h : t -> creg_help (rgmnt_c n) h m (cregs' (m + 1) (n + 1) t)
   encode_gate :: Integer -> [(Integer, String)] -> Gate -> (Integer, String)
   encode_gate i c g = case g of
-    G' g' -> (i, encode_gate' brack_q g')
+    Unitary g' -> (i, encode_gate' brack_q g')
     If_g x y z w a -> let
       f = " " ++ rgmnt "f" i ++ " " in
         (
