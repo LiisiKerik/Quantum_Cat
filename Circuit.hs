@@ -9,7 +9,7 @@ module Circuit where
   import Typing
   data Circuit = Circuit Integer [Integer] Integer Integer [Gate] deriving Show
   data Gate = G' Gate' | If_g Integer Integer Integer [Gate'] [Integer] | Mea_g Integer Integer Integer deriving Show
-  data Gate' = Double_g String Integer Integer | Single_g String Integer | Toffoli_g Integer Integer Integer
+  data Gate' = Double_gate String Integer Integer | Single_gate String Integer | Toffoli_g Integer Integer Integer
     deriving Show
   data Expression_3 =
     Add_Finite_expression_3 Integer |
@@ -21,6 +21,8 @@ module Circuit where
     Convert_Finite_expression_3 Integer |
     Crash_expression_3 |
     Creg_expression_3 Integer |
+    Double_expression_3 String |
+    Double_expression'_3 String Integer |
     Equal_Finite_expression_3 |
     Equal_Finite_expression'_3 Integer |
     Equal_Int_expression_3 |
@@ -28,7 +30,6 @@ module Circuit where
     Field_expression_3 String |
     Finite_expression_3 Integer |
     Function_expression_3 [(String, Expression_3)] Pattern_0 Expression_2 |
-    Gate_1_expression_3 String |
     Int_expression_3 Integer |
     Inverse_Finite_expression_3 Integer |
     Lift_Array_expression_3 |
@@ -38,14 +39,16 @@ module Circuit where
     Multiply_Int_expression_3 |
     Multiply_Int_expression'_3 Integer |
     Qbit_expression_3 Integer |
+    Single_expression_3 String |
     Struct_expression_3 (Map' Expression_3)
       deriving Show
   add_g :: Circuit -> Gate' -> Circuit
   add_g (Circuit cc c q cg t) h = Circuit cc c q (cg + 1) (G' h : t)
   circuit :: Defs -> Expression_2 -> Err (Circuit, Integer)
   circuit a b = circuit' (Left <$> a) init_circ b >>= \(c, d) -> case d of
+    Crash_expression_3 -> code_err "Crash."
     Creg_expression_3 e -> Right (c, e)
-    _ -> Left "Code generation error. The output should be a classical register."
+    _ -> code_err "The output should be a classical register."
   circuit' :: Map' (Either Expression_2 Expression_3) -> Circuit -> Expression_2 -> Err (Circuit, Expression_3)
   circuit' a b c =
     let
@@ -80,6 +83,14 @@ module Circuit where
           Int_expression_3 l -> Finite_expression_3 (mod l k)
           _ -> ice)
         Crash_expression_3 -> m
+        Double_expression_3 k -> r (case j of
+          Crash_expression_3 -> Crash_expression_3
+          Qbit_expression_3 l -> Double_expression'_3 k l
+          _ -> ice)
+        Double_expression'_3 k l -> Right (case j of
+          Crash_expression_3 -> (i, Crash_expression_3)
+          Qbit_expression_3 n -> (add_g i (Double_gate k l n), j)
+          _ -> ice)
         Equal_Finite_expression_3 -> r (case j of
           Crash_expression_3 -> Crash_expression_3
           Finite_expression_3 k -> Equal_Finite_expression'_3 k
@@ -108,10 +119,6 @@ module Circuit where
           in case n of
             Function_expression_2 q s -> r (Function_expression_3 o q s)
             _ -> circuit' (Prelude.foldl (flip (\(v, u) -> insert v (Right u))) a o) i n
-        Gate_1_expression_3 k -> Right (case j of
-          Crash_expression_3 -> (i, Crash_expression_3)
-          Qbit_expression_3 l -> (add_g i (Single_g k l), j)
-          _ -> ice)
         Inverse_Finite_expression_3 k -> r (case j of
           Crash_expression_3 -> Crash_expression_3
           Finite_expression_3 l -> case div_finite k 1 l of
@@ -140,16 +147,20 @@ module Circuit where
           Crash_expression_3 -> Crash_expression_3
           Int_expression_3 n -> Int_expression_3 (k * n)
           _ -> ice)
+        Single_expression_3 k -> Right (case j of
+          Crash_expression_3 -> (i, Crash_expression_3)
+          Qbit_expression_3 l -> (add_g i (Single_gate k l), j)
+          _ -> ice)
         _ -> ice
       Array_expression_2 d e -> second (Array_expression_3 d) <$> eval_list a b e
       Convert_Finite_expression_2 d -> f (Convert_Finite_expression_3 d)
       Crash_expression_2 -> m
+      Double_expression_2 d -> f (Double_expression_3 d)
       Equal_Finite_expression_2 -> f Equal_Finite_expression_3
       Equal_Int_expression_2 -> f Equal_Int_expression_3
       Field_expression_2 d -> f (Field_expression_3 d)
       Finite_expression_2 d -> f (Finite_expression_3 d)
       Function_expression_2 d e -> f (Function_expression_3 [] d e)
-      Gate_1_expression_2 d -> f (Gate_1_expression_3 d)
       Int_expression_2 d -> f (Int_expression_3 d)
       Inverse_Finite_expression_2 d -> f (Inverse_Finite_expression_3 d)
       Lift_Array_expression_2 -> f Lift_Array_expression_3
@@ -165,6 +176,7 @@ module Circuit where
       Name_expression_2 d -> case unsafe_lookup d a of
         Left g -> circuit' a b g
         Right g -> f g
+      Single_expression_2 d -> f (Single_expression_3 d)
       Struct_expression_2 d -> second Struct_expression_3 <$> eval_struct a b d
       Take_expression_2 -> eval_take b
   clean_gates ::
@@ -180,13 +192,13 @@ module Circuit where
       in
         (\(f', (gc, gq)) -> f' (clean_gates cc ((gc c, gq q), (cg - 1, t)))) (case h of
           G' g' -> case g' of
-            Double_g _ x y ->
+            Double_gate _ x y ->
               let
                 x' = q !! fromInteger x
                 y' = q !! fromInteger y
               in
                 iff [x', y'] [] [ifq x' x, ifq y' y]
-            Single_g _ x -> iff [q !! fromInteger x] [] []
+            Single_gate _ x -> iff [q !! fromInteger x] [] []
             Toffoli_g x y z ->
               let
                 x' = q !! fromInteger x
@@ -317,8 +329,8 @@ module Circuit where
     Mea_g x y z -> Mea_g (q x) (c y) z
   transf_gate' :: (Integer -> Integer) -> Gate' -> Gate'
   transf_gate' q g = case g of
-    Double_g f x y -> Double_g f (q x) (q y)
-    Single_g f x -> Single_g f (q x)
+    Double_gate f x y -> Double_gate f (q x) (q y)
+    Single_gate f x -> Single_gate f (q x)
     Toffoli_g x y z -> Toffoli_g (q x) (q y) (q z)
   transf_val :: (Integer -> Integer) -> (Integer -> Integer) -> Expression_3 -> Expression_3
   transf_val c q x =

@@ -18,12 +18,12 @@ module Typing where
     Array_expression_2 Integer [Expression_2] |
     Convert_Finite_expression_2 Integer |
     Crash_expression_2 |
+    Double_expression_2 String |
     Equal_Finite_expression_2 |
     Equal_Int_expression_2 |
     Field_expression_2 String |
     Finite_expression_2 Integer |
     Function_expression_2 Pattern_0 Expression_2 |
-    Gate_1_expression_2 String |
     Int_expression_2 Integer |
     Inverse_Finite_expression_2 Integer |
     Lift_Array_expression_2 |
@@ -31,6 +31,7 @@ module Typing where
     Multiply_Finite_expression_2 Integer |
     Multiply_Int_expression_2 |
     Name_expression_2 String |
+    Single_expression_2 String |
     Struct_expression_2 (Map' Expression_2) |
     Take_expression_2
       deriving Show
@@ -68,28 +69,34 @@ module Typing where
     fromList
       [
         ("Add_Int", Add_Int_expression_2),
+        ("CH", Double_expression_2 "ch"),
+        ("CX", Double_expression_2 "cx"),
+        ("CY", Double_expression_2 "cy"),
+        ("CZ", Double_expression_2 "cz"),
         ("Crash", Crash_expression_2),
         ("Equal_Int", Equal_Int_expression_2),
         ("False", Algebraic_expression_2 "False" []),
-        ("H", Gate_1_expression_2 "h"),
+        ("H", Single_expression_2 "h"),
         ("Multiply_Int", Multiply_Int_expression_2),
         ("Nothing", Algebraic_expression_2 "Nothing" []),
-        ("S", Gate_1_expression_2 "s"),
-        ("S'", Gate_1_expression_2 "sdg"),
-        ("T", Gate_1_expression_2 "t"),
-        ("T'", Gate_1_expression_2 "tdg"),
+        ("S", Single_expression_2 "s"),
+        ("S'", Single_expression_2 "sdg"),
+        ("T", Single_expression_2 "t"),
+        ("T'", Single_expression_2 "tdg"),
         ("Take", Take_expression_2),
         ("True", Algebraic_expression_2 "True" []),
         ("Wrap", Function_expression_2 (Name_pattern "x") (Algebraic_expression_2 "Wrap" [Name_expression_2 "x"])),
-        ("X", Gate_1_expression_2 "x"),
-        ("Y", Gate_1_expression_2 "y"),
-        ("Z", Gate_1_expression_2 "z")]
+        ("X", Single_expression_2 "x"),
+        ("Y", Single_expression_2 "y"),
+        ("Z", Single_expression_2 "z")]
   finite_type :: Type_1
   finite_type = Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N")
   function_type :: Type_1 -> Type_1 -> Type_1
   function_type = Application_type_1 <$> Application_type_1 (Name_type_1 "Function")
   gate_type_1 :: Type_1'
-  gate_type_1 = Basic_type_1 [] (function_type (Name_type_1 "Qbit") (Name_type_1 "Qbit"))
+  gate_type_1 = Basic_type_1 [] (function_type qbit_type qbit_type)
+  gate_type_2 :: Type_1'
+  gate_type_2 = Basic_type_1 [] (function_type qbit_type (function_type qbit_type qbit_type))
   ice :: t
   ice = error "Internal compiler error."
   init_type_context :: File
@@ -109,6 +116,8 @@ module Typing where
         ("Logical", Star_kind),
         ("Maybe", Arrow_kind Star_kind Star_kind),
         ("Qbit", Star_kind)]
+  qbit_type :: Type_1
+  qbit_type = Name_type_1 "Qbit"
   repl :: Map' String -> Type_1 -> Type_1
   repl a b = case b of
     Application_type_1 c d -> Application_type_1 (repl a c) (repl a d)
@@ -469,6 +478,10 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
         ("Add_Finite", Basic_type_1 [("N", Hash_kind)] (function_type finite_type (function_type finite_type finite_type))),
         ("Add_Int", Basic_type_1 [] (function_type int_type (function_type int_type int_type))),
         ("Convert_Finite", Basic_type_1 [("N", Hash_kind)] (function_type int_type finite_type)),
+        ("CH", gate_type_2),
+        ("CX", gate_type_2),
+        ("CY", gate_type_2),
+        ("CZ", gate_type_2),
         ("Crash", Basic_type_1 [("U", Star_kind)] (Name_type_1 "U")),
         (
           "Equal_Finite",
@@ -501,7 +514,7 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
         ("S'", gate_type_1),
         ("T", gate_type_1),
         ("T'", gate_type_1),
-        ("Take", Basic_type_1 [] (Name_type_1 "Qbit")),
+        ("Take", Basic_type_1 [] qbit_type),
         ("True", Basic_type_1 [] (Name_type_1 "Logical")),
         (
           "Wrap",
