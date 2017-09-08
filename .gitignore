@@ -1,4 +1,7 @@
+*.aux
 *.exe
 *.hi
+*.log
 *.o
+*.pdf
 *.qasm

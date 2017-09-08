@@ -5,6 +5,7 @@ import Code
 import Data.List
 import Data.Map
 import Naming
+import Optimise
 import Standard
 import System.Directory
 import System.Environment

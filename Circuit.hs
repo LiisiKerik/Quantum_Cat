@@ -133,7 +133,7 @@ module Circuit where
           Int_expression_3 k ->
             if k < 0 then code_err "Lift_Array applied to a negative Int." else r (Lift_Array_expression'_3 k)
           _ -> ice
-        Lift_Array_expression'_3 k -> Right (second (Array_expression_3 k) (uncurry (replicate_circuit i k) (cleanup i j)))
+        Lift_Array_expression'_3 k -> Right (second (Array_expression_3 k) (replicate_circuit i k (cleanup (i, j))))
         Multiply_Finite_expression_3 k -> r (case j of
           Crash_expression_3 -> Crash_expression_3
           Finite_expression_3 l -> Multiply_Finite_expression'_3 k l
@@ -242,8 +242,8 @@ module Circuit where
   clean_qbits m n x = case x of
     [] -> (n, [])
     h : t -> if h then second ((m, n) :) (clean_qbits (m + 1) (n + 1) t) else clean_qbits (m + 1) n t
-  cleanup :: Circuit -> Expression_3 -> (Circuit, Expression_3)
-  cleanup (Circuit cc c q cg g) x = let
+  cleanup :: (Circuit, Expression_3) -> (Circuit, Expression_3)
+  cleanup (Circuit cc c q cg g, x) = let
     ((c'', q''), (cg', g')) = clean_gates cc (tag_circ cc (init' c, replicate (fromInteger q) False) x, (cg, g))
     cc3 = count_cregs c''
     (c', cmap) = clean_cregs (cc - 1) (cc3 - 1) c''
@@ -310,8 +310,8 @@ module Circuit where
       Toffoli_expression'_3 x -> Toffoli_expression'_3 (x + q)
       Toffoli_expression''_3 x y -> Toffoli_expression''_3 (x + q) (y + q)
       _ -> v
-  replicate_circuit :: Circuit -> Integer -> Circuit -> Expression_3 -> (Circuit, [Expression_3])
-  replicate_circuit(circ @ (Circuit cc c q gc g)) n (circ' @ (Circuit cc' c' q' gc' g')) v =
+  replicate_circuit :: Circuit -> Integer -> (Circuit, Expression_3) -> (Circuit, [Expression_3])
+  replicate_circuit(circ @ (Circuit cc c q gc g)) n (circ' @ (Circuit cc' c' q' gc' g'), v) =
     if n == 0 then
       (circ, [])
     else
@@ -320,8 +320,7 @@ module Circuit where
         (replicate_circuit
           (Circuit (cc + cc') (c' ++ c) (q + q') (gc + gc') ((transf_gate (+ cc) (+ q) <$> g') ++ g))
           (n - 1)
-          circ'
-          v)
+          (circ', v))
   tag_arr :: Integer -> ([(Integer, Bool)], [Bool]) -> [Expression_3] -> ([(Integer, Bool)], [Bool])
   tag_arr cc t x = case x of
     [] -> t
