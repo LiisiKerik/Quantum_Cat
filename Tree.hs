@@ -24,7 +24,7 @@ module Tree where
   data Pattern_1 = Pattern_1 Location_0 Pattern_0 deriving Show
   data Pattern_0 = Blank_pattern | Name_pattern String deriving Show
   newtype Parser t = Parser {parser :: State -> Either Location_0 (t, State)}
-  data State = State Tokens Location_0
+  data State = State Tokens Location_0 deriving Show
   data Tree_0 = Tree_0 [Data_0] [Def_0] deriving Show
   data Tree_1 = Tree_1 [Name] Tree_0 deriving Show
   data Type_branch_0 = Application_type_0 Type_0 Type_0 | Int_type_0 Integer | Name_type_0 String deriving Show
@@ -66,9 +66,9 @@ module Tree where
        d = parse_error b
     in tokenise b c >>= \e -> case parser a (State e init_location) of
       Left f -> d f
-      Right (f, State (Tokens g _) _) -> case g of
+      Right (f, State (Tokens h _) g) -> case h of
         [] -> Right f
-        Token_1 h _ : _ -> d h
+        _ -> d g
   parse_algebraic :: Parser Data_0
   parse_algebraic = parse_data' Algebraic_token (Algebraic_data_0 <$> parse_round (parse_list 2 parse_form))
   parse_application_expression :: Parser Expression_branch_0
