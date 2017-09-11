@@ -61,6 +61,7 @@ module Naming where
           "Inverse_Finite",
           "Logical",
           "Maybe",
+          "Mod_Int",
           "Multiply_Finite",
           "Multiply_Int",
           "Nothing",

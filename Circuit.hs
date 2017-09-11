@@ -34,6 +34,8 @@ module Circuit where
     Function_expression_3 [(String, Expression_3)] Pattern_0 Expression_2 |
     Int_expression_3 Integer |
     Inverse_Finite_expression_3 Integer |
+    Mod_Int_expression_3 |
+    Mod_Int_expression'_3 Integer |
     Multiply_Finite_expression_3 Integer |
     Multiply_Finite_expression'_3 Integer Integer |
     Multiply_Int_expression_3 |
@@ -133,6 +135,14 @@ module Circuit where
             Just n -> Algebraic_expression_3 "Wrap" [Finite_expression_3 n]
             Nothing -> Algebraic_expression_3 "Nothing" []
           _ -> ice)
+        Mod_Int_expression_3 -> r (case j of
+          Crash_expression_3 -> Crash_expression_3
+          Int_expression_3 k -> Mod_Int_expression'_3 k
+          _ -> ice)
+        Mod_Int_expression'_3 k -> r (case j of
+          Crash_expression_3 -> Crash_expression_3
+          Int_expression_3 l -> Int_expression_3 (mod k (abs l))
+          _ -> ice)
         Multiply_Finite_expression_3 k -> r (case j of
           Crash_expression_3 -> Crash_expression_3
           Finite_expression_3 l -> Multiply_Finite_expression'_3 k l
@@ -184,6 +194,7 @@ module Circuit where
             in circuit' (eval_match k j a) g l
         Crash_expression_3 -> m
         _ -> ice
+      Mod_Int_expression_2 -> f Mod_Int_expression_3
       Multiply_Finite_expression_2 d -> f (Multiply_Finite_expression_3 d)
       Multiply_Int_expression_2 -> f Multiply_Int_expression_3
       Name_expression_2 d -> case unsafe_lookup d a of

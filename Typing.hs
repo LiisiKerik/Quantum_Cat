@@ -81,6 +81,7 @@ module Typing where
     Int_expression_2 Integer |
     Inverse_Finite_expression_2 Integer |
     Match_expression_2 Expression_2 Matches |
+    Mod_Int_expression_2 |
     Multiply_Finite_expression_2 Integer |
     Multiply_Int_expression_2 |
     Name_expression_2 String |
@@ -134,6 +135,7 @@ module Typing where
         ("Equal_Int", Equal_Int_expression_2),
         ("False", Algebraic_expression_2 "False" []),
         ("H", Single_expression_2 "h"),
+        ("Mod_Int", Mod_Int_expression_2),
         ("Multiply_Int", Multiply_Int_expression_2),
         ("Nothing", Algebraic_expression_2 "Nothing" []),
         ("S", Single_expression_2 "s"),
@@ -557,6 +559,7 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
           Basic_type_1
             [("N", Hash_kind)]
             (function_type finite_type (Application_type_1 (Name_type_1 "Maybe") finite_type))),
+        ("Mod_Int", Basic_type_1 [] (function_type int_type (function_type int_type int_type))),
         (
           "Multiply_Finite",
           Basic_type_1 [("N", Hash_kind)] (function_type finite_type (function_type finite_type finite_type))),
