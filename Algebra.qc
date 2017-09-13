@@ -61,11 +61,6 @@ Def Fold_Right'[A : *, B : *](i : Int, l : Int, f : Function A (Function B B), x
 Def Id[A : *](x : A) : A = x
 Def Identity[A : *](Convert_A : Function Int A) : A = Convert_A 1
 Def Join[A : *](x : Array A, y : Array A) : Array A =
-~/
-  Unsafe_Array (Add_Int (Length x) (Length y)) (z -> Match Less_Int z (Length x) {
-    False -> Unsafe_Index y (Minus z (Length x)),
-    True -> Unsafe_Index x z})
-/~
   Unsafe_Array (Add_Int (Length x) (Length y)) (z -> Match Less_Int z (Length x) {
     False -> Unsafe_Index y (Minus Add_Int Negate_Int z (Length x)),
     True -> Unsafe_Index x z})
@@ -89,6 +84,8 @@ Def Not(x : Logical) : Logical = Match x {
   False -> True,
   True -> False}
 Def Not_Equal[A : *](Equal_A : Function A (Function A Logical), x : A, y : A) : Logical = Not (Equal_A x y)
+Def Reverse[A : *](x : Array A) : Array A =
+  Unsafe_Array (Length x) (y -> Unsafe_Index x (Minus Add_Int Negate_Int (Minus Add_Int Negate_Int (Length x) 1) y))
 Def Unsafe_Array[A : *](x : Int, f : Function Int A) : Array A = Unsafe_Maybe (Array x f)
 Def Unsafe_Either[A : *, B : *](x : Either A B) : B = Match x {
   Left -> Crash,

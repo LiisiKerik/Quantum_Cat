@@ -38,7 +38,7 @@ module Naming where
     Library e -> location e) ++ " and" ++ location' d
   locations :: Locations
   locations =
-    Data.Map.fromList
+    fromList
       (
         flip (,) (Language) <$>
         [
