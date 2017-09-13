@@ -73,7 +73,7 @@ module Code where
       print_gate (case g of
         Double_gate f x y -> (f, [x, y])
         Single_gate f x -> (f, [x])
-        Toffoli_gate x y z -> ("ccx", [x, y, z]))
+        CCX_gate x y z -> ("ccx", [x, y, z]))
   newl :: [String] -> String
   newl = intercalate ";\n"
   rgmnt :: String -> Integer -> String

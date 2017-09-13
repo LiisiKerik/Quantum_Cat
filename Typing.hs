@@ -3,9 +3,8 @@ LAMBDAS
 TYPE SYNONYMS
 ADD GATES (SEE QASM DOCUMENTATION ON GITHUB)
 NESTED DEFINITIONS
-<*> OPERATOR FOR ARRAYS
-CONSTRUCTOR FOR ARRAYS
-HEAD AND TAIL
+CONSTRUCTOR FOR ARRAYS - SYNTACTIC SUGAR
+TODO: TURN ARRAYS INTO MAPS INTERNALLY TO REDUCE LOOKUP COMPLEXITY TO LOGARITHMIC?
 OPERATORS
 PRETTIER QASM CODE BY DEFINING COMPOSITE GATES IN THE CODE?
 OPTIMISATIONS IN GENERATED CIRCUIT. WIPE AND RE-USE OF BITS TO REDUCE THE REQUIRED AMOUNT OF MEMORY?
@@ -69,6 +68,7 @@ module Typing where
     Add_Int_expression_2 |
     Algebraic_expression_2 String [Expression_2] |
     Application_expression_2 Expression_2 Expression_2 |
+    CCX_expression_2 |
     Construct_expression_2 |
     Convert_Finite_expression_2 Integer |
     Crash_expression_2 |
@@ -78,8 +78,10 @@ module Typing where
     Field_expression_2 String |
     Finite_expression_2 Integer |
     Function_expression_2 Pattern_0 Expression_2 |
+    Index_expression_2 |
     Int_expression_2 Integer |
     Inverse_Finite_expression_2 Integer |
+    Length_expression_2 |
     Match_expression_2 Expression_2 Matches |
     Mod_Int_expression_2 |
     Multiply_Finite_expression_2 Integer |
@@ -87,8 +89,7 @@ module Typing where
     Name_expression_2 String |
     Single_expression_2 String |
     Struct_expression_2 (Map' Expression_2) |
-    Take_expression_2 |
-    Toffoli_expression_2
+    Take_expression_2
       deriving Show
   data File = File Kinds Algebraics Constrs Types deriving Show
   data Form_2 = Form_2 String [Type_1] deriving Show
@@ -127,6 +128,7 @@ module Typing where
       [
         ("Add_Int", Add_Int_expression_2),
         ("Array", Construct_expression_2),
+        ("CCX", CCX_expression_2),
         ("CH", Double_expression_2 "ch"),
         ("CX", Double_expression_2 "cx"),
         ("CY", Double_expression_2 "cy"),
@@ -135,6 +137,8 @@ module Typing where
         ("Equal_Int", Equal_Int_expression_2),
         ("False", Algebraic_expression_2 "False" []),
         ("H", Single_expression_2 "h"),
+        ("Index", Index_expression_2),
+        ("Length", Length_expression_2),
         ("Mod_Int", Mod_Int_expression_2),
         ("Multiply_Int", Multiply_Int_expression_2),
         ("Nothing", Algebraic_expression_2 "Nothing" []),
@@ -143,7 +147,6 @@ module Typing where
         ("T", Single_expression_2 "t"),
         ("T'", Single_expression_2 "tdg"),
         ("Take", Take_expression_2),
-        ("Toffoli", Toffoli_expression_2),
         ("True", Algebraic_expression_2 "True" []),
         ("Wrap", Function_expression_2 (Name_pattern "x") (Algebraic_expression_2 "Wrap" [Name_expression_2 "x"])),
         ("X", Single_expression_2 "x"),
@@ -179,6 +182,8 @@ module Typing where
         ("Qbit", Star_kind)]
   logical_type :: Type_1
   logical_type = Name_type_1 "Logical"
+  maybe_type :: Type_1 -> Type_1
+  maybe_type = Application_type_1 (Name_type_1 "Maybe")
   qbit_type :: Type_1
   qbit_type = Name_type_1 "Qbit"
   repl :: Map' String -> Type_1 -> Type_1
@@ -515,7 +520,7 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
       Int_type_0 b -> if e == Hash_kind then Right (Int_type_1 b) else x
       Name_type_0 f -> case Data.Map.lookup f d of
         Just (g, _) -> if g == e then Right (Name_type_1 f) else x
-        Nothing -> Left ("Undefined type" ++ f ++ location' (l a))
+        Nothing -> Left ("Undefined type " ++ f ++ location' (l a))
   type_type' :: (Location_0 -> Location_1) -> Type_0 -> Kinds -> Err (Type_1, Kind)
   type_type' l (Type_0 a c) d = case c of
     Application_type_0 e f -> type_type' l e d >>= \(g, h) -> case h of
@@ -541,12 +546,13 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
             [("U", Star_kind)]
             (function_type
               int_type
-              (function_type (function_type int_type (Name_type_1 "U")) (array_type (Name_type_1 "U"))))),
-        ("Convert_Finite", Basic_type_1 [("N", Hash_kind)] (function_type int_type finite_type)),
+              (function_type (function_type int_type (Name_type_1 "U")) (maybe_type (array_type (Name_type_1 "U")))))),
+        ("CCX", Basic_type_1 [] (function_type qbit_type (function_type qbit_type (function_type qbit_type qbit_type)))),
         ("CH", gate_type_2),
         ("CX", gate_type_2),
         ("CY", gate_type_2),
         ("CZ", gate_type_2),
+        ("Convert_Finite", Basic_type_1 [("N", Hash_kind)] (function_type int_type finite_type)),
         ("Crash", Basic_type_1 [("U", Star_kind)] (Name_type_1 "U")),
         (
           "Equal_Finite",
@@ -555,10 +561,16 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
         ("False", Basic_type_1 [] logical_type),
         ("H", gate_type_1),
         (
+          "Index",
+          Basic_type_1
+            [("A", Star_kind)]
+            (function_type (array_type (Name_type_1 "A")) (function_type int_type (maybe_type (Name_type_1 "A"))))),
+        (
           "Inverse_Finite",
           Basic_type_1
             [("N", Hash_kind)]
             (function_type finite_type (Application_type_1 (Name_type_1 "Maybe") finite_type))),
+        ("Length", Basic_type_1 [("A", Star_kind)] (function_type (array_type (Name_type_1 "A")) int_type)),
         ("Mod_Int", Basic_type_1 [] (function_type int_type (function_type int_type int_type))),
         (
           "Multiply_Finite",
@@ -574,7 +586,6 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
         ("T", gate_type_1),
         ("T'", gate_type_1),
         ("Take", Basic_type_1 [] qbit_type),
-        ("Toffoli", Basic_type_1 [] (function_type qbit_type (function_type qbit_type (function_type qbit_type qbit_type)))),
         ("True", Basic_type_1 [] logical_type),
         (
           "Wrap",

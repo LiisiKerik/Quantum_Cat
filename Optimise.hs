@@ -17,6 +17,13 @@ module Optimise where
       in
         (\(f', (gc, gq)) -> f' (clean_gates cc ((gc c, gq q), (cg - 1, t)))) (case h of
           Unitary g' -> case g' of
+            CCX_gate x y z ->
+              let
+                x' = q !! fromInteger x
+                y' = q !! fromInteger y
+                z' = q !! fromInteger z
+              in
+                iff [x', y', z'] [] [ifq x' x, ifq y' y, ifq z' z]
             Double_gate _ x y ->
               let
                 x' = q !! fromInteger x
@@ -24,13 +31,6 @@ module Optimise where
               in
                 iff [x', y'] [] [ifq x' x, ifq y' y]
             Single_gate _ x -> iff [q !! fromInteger x] [] []
-            Toffoli_gate x y z ->
-              let
-                x' = q !! fromInteger x
-                y' = q !! fromInteger y
-                z' = q !! fromInteger z
-              in
-                iff [x', y', z'] [] [ifq x' x, ifq y' y, ifq z' z]
           If_g x _ _ _ y ->
             let
               x' = q !! fromInteger (cc - x - 1)
@@ -79,9 +79,9 @@ module Optimise where
   transf_gate :: (Integer -> Integer) -> (Integer -> Integer) -> Gate -> Gate
   transf_gate c q g = case g of
     Unitary g' -> Unitary (case g' of
+      CCX_gate x y z -> CCX_gate (q x) (q y) (q z)
       Double_gate f x y -> Double_gate f (q x) (q y)
-      Single_gate f x -> Single_gate f (q x)
-      Toffoli_gate x y z -> Toffoli_gate (q x) (q y) (q z))
+      Single_gate f x -> Single_gate f (q x))
     If_g x y a f z -> If_g (c x) y a f (q <$> z)
     Mea_g x y z -> Mea_g (q x) (c y) z
   update_c :: Integer -> Integer -> [(Integer, Bool)] -> [(Integer, Bool)]
