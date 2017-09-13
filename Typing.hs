@@ -82,11 +82,13 @@ module Typing where
     Int_expression_2 Integer |
     Inverse_Finite_expression_2 Integer |
     Length_expression_2 |
+    Less_Int_expression_2 |
     Match_expression_2 Expression_2 Matches |
     Mod_Int_expression_2 |
     Multiply_Finite_expression_2 Integer |
     Multiply_Int_expression_2 |
     Name_expression_2 String |
+    Negate_Int_expression_2 |
     Single_expression_2 String |
     Struct_expression_2 (Map' Expression_2) |
     Take_expression_2
@@ -139,8 +141,10 @@ module Typing where
         ("H", Single_expression_2 "h"),
         ("Index", Index_expression_2),
         ("Length", Length_expression_2),
+        ("Less_Int", Less_Int_expression_2),
         ("Mod_Int", Mod_Int_expression_2),
         ("Multiply_Int", Multiply_Int_expression_2),
+        ("Negate_Int", Negate_Int_expression_2),
         ("Nothing", Algebraic_expression_2 "Nothing" []),
         ("S", Single_expression_2 "s"),
         ("S'", Single_expression_2 "sdg"),
@@ -571,15 +575,13 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
             [("N", Hash_kind)]
             (function_type finite_type (Application_type_1 (Name_type_1 "Maybe") finite_type))),
         ("Length", Basic_type_1 [("A", Star_kind)] (function_type (array_type (Name_type_1 "A")) int_type)),
+        ("Less_Int", Basic_type_1 [] (function_type int_type (function_type int_type logical_type))),
         ("Mod_Int", Basic_type_1 [] (function_type int_type (function_type int_type int_type))),
         (
           "Multiply_Finite",
           Basic_type_1 [("N", Hash_kind)] (function_type finite_type (function_type finite_type finite_type))),
-        (
-          "Multiply_Int",
-          Basic_type_1
-            []
-            (function_type int_type (function_type int_type int_type))),
+        ("Multiply_Int", Basic_type_1 [] (function_type int_type (function_type int_type int_type))),
+        ("Negate_Int", Basic_type_1 [] (function_type int_type int_type)),
         ("Nothing", Basic_type_1 [("U", Star_kind)] (Application_type_1 (Name_type_1 "Maybe") (Name_type_1 "U"))),
         ("S", gate_type_1),
         ("S'", gate_type_1),

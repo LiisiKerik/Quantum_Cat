@@ -5,13 +5,25 @@ Def Add_Array[A : *](Add_A : Function A (Function A A), x : Array A, y : Array A
 Def Add_Logical(x : Logical, y : Logical) : Logical = Match x {
   False -> y,
   True -> Not y}
+Def Add_Pair[A : *, B : *] :
+  Function
+    (Function A (Function A A))
+    (Function (Function B (Function B B)) (Function (Pair A B) (Function (Pair A B) (Pair A B)))) =
+      Zip_Pair
 Def Apply_Array[A : *, B : *](x : Array (Function A B), y : Array A) : Maybe (Array B) =
   Match Equal_Int (Length x) (Length y) {
     False -> Nothing,
     True -> Array (Length x) (z -> (Unsafe_Index x z) (Unsafe_Index y z))}
-Def Apply_Function[A : *, B : *, C : *](x : Function A (Function B C), y : Function A B, z : A) : C = x z (y z)
+Def Apply_Either[A : *, B : *, C : *](x : Either A (Function B C), y : Either A B) : Either A C = Match x {
+  Left z -> Left z,
+  Right f -> Map_Either f y}
+Def Apply_Function[A : *, B : *, C : *](f : Function A (Function B C), g : Function A B, x : A) : C = f x (g x)
+Def Apply_Maybe[A : *, B : *](x : Maybe (Function A B), y : Maybe A) : Maybe B = Match x {
+  Nothing -> Nothing,
+  Wrap f -> Map_Maybe f y}
 Def Convert_Int : Function Int Int = Id
 Def Convert_Logical(x : Int) : Logical = Equal_Int (Mod_Int x 2) 1
+Def Equal_Array[A : *](Equal_A : Function A (Function A Logical), x : Array A, y : Array A) : Logical = Crash
 Def Equal_Either
   [A : *, B : *]
   (Equal_A : Function A (Function A Logical), Equal_B : Function B (Function B Logical), x : Either A B, y : Either A B) :
@@ -35,8 +47,28 @@ Def Equal_Pair
   (Equal_A : Function A (Function A Logical), Equal_B : Function B (Function B Logical), x : Pair A B, y : Pair A B) :
   Logical =
     Multiply_Logical (Equal_A (First x) (First y)) (Equal_B (Second x) (Second y))
+Def Flatten_Pair[A : *, B : *]
+  (Flatten_A : Function A (Array Qbit), Flatten_B : Function B (Array Qbit), x : Pair A B) : Array Qbit =
+    Join (Flatten_A (First x)) (Flatten_B (Second x))
+Def Fold_Left[A : *, B : *](f : Function A (Function B A), x : A, y : Array B) : A = Fold_Left' 0 (Length y) f x y
+Def Fold_Left'[A : *, B : *](i : Int, l : Int, f : Function A (Function B A), x : A, y : Array B) : A = Match Equal_Int i l {
+  False -> Fold_Left' (Add_Int i 1) l f (f x (Unsafe_Index y i)) y,
+  True -> x}
+Def Fold_Right[A : *, B : *](f : Function A (Function B B), x : B, y : Array A) : B = Fold_Right' 0 (Length y) f x y
+Def Fold_Right'[A : *, B : *](i : Int, l : Int, f : Function A (Function B B), x : B, y : Array A) : B = Match Equal_Int i l {
+  False -> f (Unsafe_Index y i) (Fold_Right' (Add_Int i 1) l f x y),
+  True -> x}
 Def Id[A : *](x : A) : A = x
 Def Identity[A : *](Convert_A : Function Int A) : A = Convert_A 1
+Def Join[A : *](x : Array A, y : Array A) : Array A =
+~/
+  Unsafe_Array (Add_Int (Length x) (Length y)) (z -> Match Less_Int z (Length x) {
+    False -> Unsafe_Index y (Minus z (Length x)),
+    True -> Unsafe_Index x z})
+/~
+  Unsafe_Array (Add_Int (Length x) (Length y)) (z -> Match Less_Int z (Length x) {
+    False -> Unsafe_Index y (Minus Add_Int Negate_Int z (Length x)),
+    True -> Unsafe_Index x z})
 Def Lift_Array[A : *](x : Int, y : A) : Maybe (Array A) = Array x (Lift_Function y)
 Def Lift_Either[A : *, B : *] : Function B (Either A B) = Right
 Def Lift_Function[A : *, B : *](x : A, _ : B) : A = x
@@ -45,6 +77,9 @@ Def Map_Either[A : *, B : *, C : *](f : Function A B, x : Either C A) : Either C
   Left y -> Left y,
   Right y -> Right (f y)}
 Def Map_Function[A : *, B : *, C : *](f : Function A B, g : Function C A, x : C) : B = f (g x)
+Def Map_Maybe[A : *, B : *](f : Function A B, x : Maybe A) : Maybe B = Match x {
+  Nothing -> Nothing,
+  Wrap y -> Wrap (f y)}
 Def Map_Pair[A : *, B : *, C : *](f : Function A B, x : Pair C A) : Pair C B = Pair (First x) (f (Second x))
 Def Minus[A : *](Add_A : Function A (Function A A), Negate_A : Function A A, x : A, y : A) : A = Add_A x (Negate_A y)
 Def Multiply_Logical(x : Logical, y : Logical) : Logical = Match x {
@@ -66,4 +101,18 @@ Def Unsafe_Maybe[A : *](x : Maybe A) : A = Match x {
 Def Zero[A : *](Convert_A : Function Int A) : A = Convert_A 0
 Def Zip_Array[A : *, B : *, C : *](f : Function A (Function B C), x : Array A) : Function (Array B) (Maybe (Array C)) =
   Apply_Array (Map_Array f x)
+Def Zip_Functor
+  [F : * -> *, A : *, B : *, C : *]
+  (
+    Apply_F : Function (F (Function A B)) (Function (F A) (F B)),
+    Map_F : Function (Function C (Function A B)) (Function (F C) (F (Function A B))),
+    f : Function C (Function A B),
+    x : F C) :
+  Function (F A) (F B) =
+    Apply_F (Map_F f x)
+Def Zip_Pair
+  [A : *, B : *, C : *, D : *, E : *, F : *]
+  (f : Function A (Function B C), g : Function D (Function E F), x : Pair A D, y : Pair B E) :
+  Pair C F =
+    Pair (f (First x) (First y)) (g (Second x) (Second y))
 `````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````

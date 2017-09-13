@@ -40,12 +40,15 @@ module Circuit where
     Int_expression_3 Integer |
     Inverse_Finite_expression_3 Integer |
     Length_expression_3 |
+    Less_Int_expression_3 |
+    Less_Int_expression'_3 Integer |
     Mod_Int_expression_3 |
     Mod_Int_expression'_3 Integer |
     Multiply_Finite_expression_3 Integer |
     Multiply_Finite_expression'_3 Integer Integer |
     Multiply_Int_expression_3 |
     Multiply_Int_expression'_3 Integer |
+    Negate_Int_expression_3 |
     Qbit_expression_3 Integer |
     Single_expression_3 String |
     Struct_expression_3 (Map' Expression_3)
@@ -171,6 +174,14 @@ module Circuit where
           Array_expression_3 k _ -> Int_expression_3 k
           Crash_expression_3 -> Crash_expression_3
           _ -> ice)
+        Less_Int_expression_3 -> r (case j of
+          Crash_expression_3 -> Crash_expression_3
+          Int_expression_3 k -> Less_Int_expression'_3 k
+          _ -> ice)
+        Less_Int_expression'_3 k -> r (case j of
+          Crash_expression_3 -> Crash_expression_3
+          Int_expression_3 l -> Algebraic_expression_3 (show (k < l)) []
+          _ -> ice)
         Mod_Int_expression_3 -> r (case j of
           Crash_expression_3 -> Crash_expression_3
           Int_expression_3 k -> Mod_Int_expression'_3 k
@@ -195,6 +206,10 @@ module Circuit where
           Crash_expression_3 -> Crash_expression_3
           Int_expression_3 n -> Int_expression_3 (k * n)
           _ -> ice)
+        Negate_Int_expression_3 -> r (case j of
+          Crash_expression_3 -> Crash_expression_3
+          Int_expression_3 k -> Int_expression_3 (- k)
+          _ -> ice)
         Single_expression_3 k -> Right (case j of
           Crash_expression_3 -> (i, Crash_expression_3)
           Qbit_expression_3 l -> (add_g i (Single_gate k l), j)
@@ -214,6 +229,7 @@ module Circuit where
       Int_expression_2 d -> f (Int_expression_3 d)
       Inverse_Finite_expression_2 d -> f (Inverse_Finite_expression_3 d)
       Length_expression_2 -> f Length_expression_3
+      Less_Int_expression_2 -> f Less_Int_expression_3
       Match_expression_2 d e -> circuit' a b d >>= \(g, h) -> case h of
         Algebraic_expression_3 i j ->
             let
@@ -227,6 +243,7 @@ module Circuit where
       Name_expression_2 d -> case unsafe_lookup d a of
         Left g -> circuit' a b g
         Right g -> f g
+      Negate_Int_expression_2 -> f Negate_Int_expression_3
       Single_expression_2 d -> f (Single_expression_3 d)
       Struct_expression_2 d -> second Struct_expression_3 <$> eval_struct a b d
       Take_expression_2 -> eval_take b
