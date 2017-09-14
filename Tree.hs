@@ -14,7 +14,7 @@ module Tree where
     Finite_expression_0 Integer Integer |
     Function_expression_0 Pattern_1 Expression_0 |
     Int_expression_0 Integer |
-    Match_expression_0 Expression_0 [Match_0] |
+    Match_expression_0 Expression_0 [Match_0] (Maybe Expression_0) |
     Name_expression_0 String
       deriving Show
   data Form_0 = Form_0 Name [Type_0] deriving Show
@@ -186,7 +186,8 @@ module Tree where
     parse_token Match_token <*>
     parse_expression' <*
     parse_token Left_curly_token <*>
-    parse_list 2 parse_match <*
+    parse_list 2 parse_match <*>
+    (parse_comma *> parse_token Default_token *> parse_arrow *> (Just <$> parse_expression') <|> return Nothing) <*
     parse_token Right_curly_token
   parse_name :: Parser String
   parse_name = parse_elementary (\a -> case a of

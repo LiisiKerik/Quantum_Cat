@@ -230,11 +230,15 @@ module Circuit where
       Inverse_Finite_expression_2 d -> f (Inverse_Finite_expression_3 d)
       Length_expression_2 -> f Length_expression_3
       Less_Int_expression_2 -> f Less_Int_expression_3
-      Match_expression_2 d e -> circuit' a b d >>= \(g, h) -> case h of
+      Match_expression_2 d e n -> circuit' a b d >>= \(g, h) -> case h of
         Algebraic_expression_3 i j ->
-            let
-              Match k l = unsafe_lookup i e
-            in circuit' (eval_match k j a) g l
+          let
+            o p = circuit' p g
+          in case Data.Map.lookup i e of
+            Just (Match k l) -> o (eval_match k j a) l
+            Nothing -> case n of
+              Just q -> o a q
+              Nothing -> ice
         Crash_expression_3 -> m
         _ -> ice
       Mod_Int_expression_2 -> f Mod_Int_expression_3

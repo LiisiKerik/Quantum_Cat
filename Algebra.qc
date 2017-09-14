@@ -47,9 +47,10 @@ Def Equal_Pair
   (Equal_A : Function A (Function A Logical), Equal_B : Function B (Function B Logical), x : Pair A B, y : Pair A B) :
   Logical =
     Multiply_Logical (Equal_A (First x) (First y)) (Equal_B (Second x) (Second y))
-Def Flatten_Pair[A : *, B : *]
-  (Flatten_A : Function A (Array Qbit), Flatten_B : Function B (Array Qbit), x : Pair A B) : Array Qbit =
-    Join (Flatten_A (First x)) (Flatten_B (Second x))
+~/
+Def Flatten_Pair[A : *, B : *](Flatten_A : Function A Creg, Flatten_B : Function B Creg, x : Pair A B) : Creg =
+  Join_Creg (Flatten_A (First x)) (Flatten_B (Second x))
+/~
 Def Fold_Left[A : *, B : *](f : Function A (Function B A), x : A, y : Array B) : A = Fold_Left' 0 (Length y) f x y
 Def Fold_Left'[A : *, B : *](i : Int, l : Int, f : Function A (Function B A), x : A, y : Array B) : A = Match Equal_Int i l {
   False -> Fold_Left' (Add_Int i 1) l f (f x (Unsafe_Index y i)) y,
@@ -60,7 +61,7 @@ Def Fold_Right'[A : *, B : *](i : Int, l : Int, f : Function A (Function B B), x
   True -> x}
 Def Id[A : *](x : A) : A = x
 Def Identity[A : *](Convert_A : Function Int A) : A = Convert_A 1
-Def Join[A : *](x : Array A, y : Array A) : Array A =
+Def Join_Array[A : *](x : Array A, y : Array A) : Array A =
   Unsafe_Array (Add_Int (Length x) (Length y)) (z -> Match Less_Int z (Length x) {
     False -> Unsafe_Index y (Minus Add_Int Negate_Int z (Length x)),
     True -> Unsafe_Index x z})

@@ -15,7 +15,7 @@ module Naming where
     Finite_expression_1 Integer Integer |
     Function_expression_1 Pattern_0 Expression_1 |
     Int_expression_1 Integer |
-    Match_expression_1 Expression_1 [Match_1] |
+    Match_expression_1 Expression_1 [Match_1] (Maybe Expression_1) |
     Name_expression_1 String
       deriving Show
   data Expression_1 = Expression_1 Location_0 Expression_branch_1 deriving Show
@@ -131,7 +131,12 @@ module Naming where
     Finite_expression_0 c d -> Right (Finite_expression_1 c d)
     Function_expression_0 c d -> naming_pattern g c b >>= \(e, f) -> Function_expression_1 f <$> naming_expression g d e
     Int_expression_0 c -> Right (Int_expression_1 c)
-    Match_expression_0 c d -> naming_expression g c b >>= \e -> Match_expression_1 e <$> naming_matches g d b
+    Match_expression_0 c d f -> naming_expression g c b >>= \e -> naming_matches g d b >>= \h ->
+      let
+        i = Match_expression_1 e h
+      in case f of
+        Just j -> (\k -> i (Just k)) <$> naming_expression g j b
+        Nothing -> Right (i Nothing)
     Name_expression_0 c -> Right (Name_expression_1 c)
   naming_fields :: String -> [(Name, Type_0)] -> Locations -> Err (Locations, Data_branch_1)
   naming_fields b a c = second Struct_data_1 <$> naming_arguments naming_name b a c

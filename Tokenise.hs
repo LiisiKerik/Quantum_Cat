@@ -22,6 +22,7 @@ module Tokenise where
     Case_token |
     Comma_token |
     Def_token |
+    Default_token |
     Hash_token |
     Int_token Integer |
     Left_curly_token |
@@ -164,6 +165,7 @@ module Tokenise where
     "Algebraic" -> Algebraic_token
     "Case" -> Case_token
     "Def" -> Def_token
+    "Default" -> Default_token
     "Load" -> Load_token
     "Match" -> Match_token
     "Struct" -> Struct_token

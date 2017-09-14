@@ -9,7 +9,6 @@ OPERATORS
 PRETTIER QASM CODE BY DEFINING COMPOSITE GATES IN THE CODE?
 OPTIMISATIONS IN GENERATED CIRCUIT. WIPE AND RE-USE OF BITS TO REDUCE THE REQUIRED AMOUNT OF MEMORY?
 ARRAY INDEXATION
-REMOVE TYPE-LEVEL INTS AND FINITE N TYPE?
 ALLOW MORE THAN 1-DIMENSIONAL CBIT ARRAYS (AND ALSO SINGLE CBITS) AS OUTPUTS?
 NECESSARY OPERATIONS FOR INTS, BOOLS
 CASE EXPRESSIONS FOR VALUES - SWITCH
@@ -77,7 +76,7 @@ module Typing where
     Inverse_Finite_expression_2 Integer |
     Length_expression_2 |
     Less_Int_expression_2 |
-    Match_expression_2 Expression_2 Matches |
+    Match_expression_2 Expression_2 Matches (Maybe Expression_2) |
     Mod_Int_expression_2 |
     Multiply_Finite_expression_2 Integer |
     Multiply_Int_expression_2 |
@@ -437,7 +436,7 @@ module Typing where
           g
           (Name_type_1 (show (o + 1))))
     Int_expression_1 c -> Right (Int_expression_2 c, f, (e, int_type) : h, o, s)
-    Match_expression_1 c g -> case g of
+    Match_expression_1 c g k -> case g of
       [] -> ice
       Match_1 (Name i0 i) _ _ : _ -> case Data.Map.lookup i w of
         Just (x, _) ->
@@ -446,10 +445,13 @@ module Typing where
             (b1, b2) = typevars (flip (++) (show s)) y (empty, f)
           in (
             type_expression v w r o (s + 1) b2 h d c (repl b1 a1) >>=
-            \(a0, b0, c0, d0, e0) ->
-              (
-                (\(f0, g0, h0, i', j') -> (Match_expression_2 a0 f0, j', i', g0, h0)) <$>
-                type_cases e v w d r x b1 z g (empty, d0, e0, c0, b0)))
+            \(a0, b0, c0, d0, e0) -> type_cases e v w d r x b1 z g (empty, d0, e0, c0, b0) >>= \(f0, g0, h0, i', j') ->
+              let
+                j2 = Match_expression_2 a0 f0
+              in case k of
+                Just k' ->
+                  (\(f1, g1, h1, i1, j1) -> (j2 (Just f1), g1, h1, i1, j1)) <$> type_expression v w r g0 h0 j' i' d k' e
+                Nothing -> Right (j2 Nothing, j', i', g0, h0))
         Nothing -> Left ("Undefined algebraic constructor " ++ i ++ location' (r i0))
     Name_expression_1 c -> case Data.Map.lookup c d of
       Just (g, _) ->
