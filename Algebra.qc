@@ -51,14 +51,16 @@ Def Equal_Pair
 Def Flatten_Pair[A : *, B : *](Flatten_A : Function A Creg, Flatten_B : Function B Creg, x : Pair A B) : Creg =
   Join_Creg (Flatten_A (First x)) (Flatten_B (Second x))
 /~
+Def Flip[A : *, B : *, C : *](f : Function A (Function B C), x : B, y : A) : C = f y x
 Def Fold_Left[A : *, B : *](f : Function A (Function B A), x : A, y : Array B) : A = Fold_Left' 0 (Length y) f x y
 Def Fold_Left'[A : *, B : *](i : Int, l : Int, f : Function A (Function B A), x : A, y : Array B) : A = Match Equal_Int i l {
   False -> Fold_Left' (Add_Int i 1) l f (f x (Unsafe_Index y i)) y,
   True -> x}
 Def Fold_Right[A : *, B : *](f : Function A (Function B B), x : B, y : Array A) : B = Fold_Right' 0 (Length y) f x y
-Def Fold_Right'[A : *, B : *](i : Int, l : Int, f : Function A (Function B B), x : B, y : Array A) : B = Match Equal_Int i l {
-  False -> f (Unsafe_Index y i) (Fold_Right' (Add_Int i 1) l f x y),
-  True -> x}
+Def Fold_Right'[A : *, B : *](i : Int, l : Int, f : Function A (Function B B), x : B, y : Array A) : B =
+  Match Equal_Int i l {
+    False -> f (Unsafe_Index y i) (Fold_Right' (Add_Int i 1) l f x y),
+    True -> x}
 Def Id[A : *](x : A) : A = x
 Def Identity[A : *](Convert_A : Function Int A) : A = Convert_A 1
 Def Join_Array[A : *](x : Array A, y : Array A) : Array A =

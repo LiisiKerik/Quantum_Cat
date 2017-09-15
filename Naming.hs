@@ -12,7 +12,6 @@ module Naming where
   data Def_2 = Basic_def_2 Location_0 String [(String, Kind)] Type_0 Expression_1 deriving Show
   data Expression_branch_1 =
     Application_expression_1 Expression_1 Expression_1 |
-    Finite_expression_1 Integer Integer |
     Function_expression_1 Pattern_0 Expression_1 |
     Int_expression_1 Integer |
     Match_expression_1 Expression_1 Matches_1 |
@@ -45,7 +44,6 @@ module Naming where
       (
         flip (,) (Language) <$>
         [
-          "Add_Finite",
           "Add_Int",
           "Array",
           "CCX",
@@ -53,24 +51,19 @@ module Naming where
           "CX",
           "CY",
           "CZ",
-          "Convert_Finite",
           "Crash",
-          "Equal_Finite",
           "Equal_Int",
           "False",
-          "Finite",
           "Function",
           "H",
           "Index",
           "Int",
-          "Inverse_Finite",
           "Length",
           "Less_Int",
           "Logical",
           "Maybe",
           "Measure",
           "Mod_Int",
-          "Multiply_Finite",
           "Multiply_Int",
           "Negate_Int",
           "Nothing",
@@ -81,6 +74,7 @@ module Naming where
           "T'",
           "Take",
           "True",
+          "Unit",
           "Wrap",
           "X",
           "Y",
@@ -132,7 +126,6 @@ module Naming where
   naming_expression_branch :: String -> Expression_branch_0 -> Locations -> Err Expression_branch_1
   naming_expression_branch g a b = case a of
     Application_expression_0 c d -> naming_expression g c b >>= \e -> Application_expression_1 e <$> naming_expression g d b
-    Finite_expression_0 c d -> Right (Finite_expression_1 c d)
     Function_expression_0 c d -> naming_pattern g c b >>= \(e, f) -> Function_expression_1 f <$> naming_expression g d e
     Int_expression_0 c -> Right (Int_expression_1 c)
     Match_expression_0 c d -> naming_expression g c b >>= \e -> Match_expression_1 e <$> naming_matches g d b

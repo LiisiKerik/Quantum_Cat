@@ -4,7 +4,7 @@ if gate
 let expression
 constructor for arrays [x0, x1, x2, ...] in addition to existing length-and-index constructor
 make match work with negative ints (modify parser)
-make type of take unit -> qbit
+make type of take :: unit -> qbit
 check whether kinds of everything are ok (ending with a star) - potential failure to catch very stupid bugs
 addition of qnums. test it
 protection against duplicate file loading - what happens now? if crashes - fix, give a nice error/warning. if nothing - warn?
@@ -17,7 +17,6 @@ NICE-TO-HAVE
 type synonyms
 operators
 type operators
-prettier result code by letting user define composite gates which will be printed as subroutine in end code
 abstract methods
 optimisations in generated circuit. wipe and re-use of qbits and cregs to reduce the required amount of memory
 internal: attach scope tags to kinds once instead of doing it in type_kinds
@@ -25,7 +24,6 @@ if-elif-else
 eta reduction warnings
 unused type variable warnings
 unused local variable warnings
-make match work with finite
 add something for easily changing fields of structs
 internal: do something with old/new status tags. check where exactly they're necessary. get rid of them where they're useless
 internal: with new matching error system, do we need to keep locations for each match? if not, modify parser/namer to remove
@@ -35,10 +33,11 @@ internal: do something with the internal representation of arrays to reduce look
 allow more than 1-dimensional cbit arrays (and also single cbits) as outputs?
 linked lists?
 gather naming and type errors and give a list instead of giving only the first one?
-internal: remove locations from expressions except from lowest-level things where some checks are necessary (finite, name)?
+internal: remove locations from expressions except from lowest-level things where some checks are necessary (name)?
 switch expression that is less strict and more flexible than match?
 generalise if gate to work on different kinds of structs, not only on cregs?
 change how crash works? wrap expr_3 in maybe, make constructors give crash as a result when they get crash as argument?
+prettier result code by letting user define composite gates which will be printed as subroutine in end code?
 -}
 -----------------------------------------------------------------------------------------------------------------------------
 {-# OPTIONS_GHC -Wall #-}
@@ -53,29 +52,23 @@ module Typing where
   data Def_4 = Basic_def_4 Location_0 String [(String, Kind)] Kinds Type_1 Expression_1 deriving Show
   type Defs = Map' Expression_2
   data Expression_2 =
-    Add_Finite_expression_2 Integer |
     Add_Int_expression_2 |
     Algebraic_expression_2 String [Expression_2] |
     Application_expression_2 Expression_2 Expression_2 |
     CCX_expression_2 |
     Construct_expression_2 |
-    Convert_Finite_expression_2 Integer |
     Crash_expression_2 |
     Double_expression_2 String |
-    Equal_Finite_expression_2 |
     Equal_Int_expression_2 |
     Field_expression_2 String |
-    Finite_expression_2 Integer |
     Function_expression_2 Pattern_0 Expression_2 |
     Index_expression_2 |
     Int_expression_2 Integer |
-    Inverse_Finite_expression_2 Integer |
     Length_expression_2 |
     Less_Int_expression_2 |
     Match_expression_2 Expression_2 Matches_2 |
     Measure_expression_2 |
     Mod_Int_expression_2 |
-    Multiply_Finite_expression_2 Integer |
     Multiply_Int_expression_2 |
     Name_expression_2 String |
     Negate_Int_expression_2 |
@@ -91,7 +84,7 @@ module Typing where
     Matches_Algebraic_2 (Map' Match_Algebraic_2) (Maybe Expression_2) | Matches_Int_2 (Map Integer Expression_2) Expression_2
       deriving Show
   data Status' = Fixed | Flexible deriving Show
-  data Type_1 = Application_type_1 Type_1 Type_1 | Int_type_1 Integer | Name_type_1 String deriving (Eq, Show)
+  data Type_1 = Application_type_1 Type_1 Type_1 | Name_type_1 String deriving (Eq, Show)
   data Type_1' = Basic_type_1 [(String, Kind)] Type_1 | Local_type_1 Type_1 deriving Show
   type Types = Map' (Type_1', Status)
   algebraics :: Map' ([(String, Kind)], Map' [Type_1], Type_1)
@@ -102,9 +95,9 @@ module Typing where
         (
           "Maybe",
           (
-            [("U", Star_kind)],
-            fromList [("Nothing", []), ("Wrap", [Name_type_1 "U"])],
-            Application_type_1 (Name_type_1 "Maybe") (Name_type_1 "U")))]
+            [("A", Star_kind)],
+            fromList [("Nothing", []), ("Wrap", [Name_type_1 "A"])],
+            maybe_type (Name_type_1 "A")))]
   array_type :: Type_1 -> Type_1
   array_type = Application_type_1 (Name_type_1 "Array")
   check_kind :: String -> String -> Map' ((Kind, Status), Status') -> Type_1 -> Err Kind
@@ -113,48 +106,77 @@ module Typing where
       Arrow_kind g h -> check_kind j c a e >>= \i -> if i == g then Right h else Left j
       _ -> Left j
     Name_type_1 d -> if d == c then Left j else Right (fst (fst (unsafe_lookup d a)))
-    _ -> Right Hash_kind
   constrs :: Map' String
   constrs = fromList [("False", "Logical"), ("Nothing", "Maybe"), ("True", "Logical"), ("Wrap", "Maybe")]
   creg_type :: Type_1
   creg_type = Name_type_1 "Creg"
-  defs :: Map' Expression_2
-  defs =
+  defs_and_types :: Map' (Expression_2, Type_1')
+  defs_and_types =
     fromList
       [
-        ("Add_Int", Add_Int_expression_2),
-        ("Array", Construct_expression_2),
-        ("CCX", CCX_expression_2),
-        ("CH", Double_expression_2 "ch"),
-        ("CX", Double_expression_2 "cx"),
-        ("CY", Double_expression_2 "cy"),
-        ("CZ", Double_expression_2 "cz"),
-        ("Crash", Crash_expression_2),
-        ("Equal_Int", Equal_Int_expression_2),
-        ("False", Algebraic_expression_2 "False" []),
-        ("H", Single_expression_2 "h"),
-        ("Index", Index_expression_2),
-        ("Length", Length_expression_2),
-        ("Less_Int", Less_Int_expression_2),
-        ("Measure", Measure_expression_2),
-        ("Mod_Int", Mod_Int_expression_2),
-        ("Multiply_Int", Multiply_Int_expression_2),
-        ("Negate_Int", Negate_Int_expression_2),
-        ("Nothing", Algebraic_expression_2 "Nothing" []),
-        ("S", Single_expression_2 "s"),
-        ("S'", Single_expression_2 "sdg"),
-        ("T", Single_expression_2 "t"),
-        ("T'", Single_expression_2 "tdg"),
-        ("Take", Take_expression_2),
-        ("True", Algebraic_expression_2 "True" []),
-        ("Wrap", Function_expression_2 (Name_pattern "x") (Algebraic_expression_2 "Wrap" [Name_expression_2 "x"])),
-        ("X", Single_expression_2 "x"),
-        ("Y", Single_expression_2 "y"),
-        ("Z", Single_expression_2 "z")]
+        ("Add_Int", (Add_Int_expression_2, Basic_type_1 [] (function_type int_type (function_type int_type int_type)))),
+        (
+          "Array",
+          (
+            Construct_expression_2,
+            Basic_type_1
+              [("A", Star_kind)]
+              (function_type
+                int_type
+                (function_type (function_type int_type (Name_type_1 "A")) (maybe_type (array_type (Name_type_1 "A"))))))),
+        (
+          "CCX",
+          (
+            CCX_expression_2,
+            Basic_type_1 [] (function_type qbit_type (function_type qbit_type (function_type qbit_type qbit_type))))),
+        ("CH", (Double_expression_2 "ch", gate_type_2)),
+        ("CX", (Double_expression_2 "cx", gate_type_2)),
+        ("CY", (Double_expression_2 "cy", gate_type_2)),
+        ("CZ", (Double_expression_2 "cz", gate_type_2)),
+        ("Crash", (Crash_expression_2, Basic_type_1 [("A", Star_kind)] (Name_type_1 "A"))),
+        (
+          "Equal_Int",
+          (Equal_Int_expression_2, Basic_type_1 [] (function_type int_type (function_type int_type logical_type)))),
+        ("False", (Algebraic_expression_2 "False" [], Basic_type_1 [] logical_type)),
+        ("H", (Single_expression_2 "h", gate_type_1)),
+        (
+          "Index",
+          (
+            Index_expression_2,
+            Basic_type_1
+              [("A", Star_kind)]
+              (function_type (array_type (Name_type_1 "A")) (function_type int_type (maybe_type (Name_type_1 "A")))))),
+        (
+          "Length",
+          (Length_expression_2, Basic_type_1 [("A", Star_kind)] (function_type (array_type (Name_type_1 "A")) int_type))),
+        (
+          "Less_Int",
+          (Less_Int_expression_2, Basic_type_1 [] (function_type int_type (function_type int_type logical_type)))),
+        ("Measure", (Measure_expression_2, Basic_type_1 [] (function_type (array_type qbit_type) creg_type))),
+        ("Mod_Int", (Mod_Int_expression_2, Basic_type_1 [] (function_type int_type (function_type int_type int_type)))),
+        (
+          "Multiply_Int",
+          (Multiply_Int_expression_2, Basic_type_1 [] (function_type int_type (function_type int_type int_type)))),
+        ("Negate_Int", (Negate_Int_expression_2, Basic_type_1 [] (function_type int_type int_type))),
+        ("Nothing", (Algebraic_expression_2 "Nothing" [], Basic_type_1 [("A", Star_kind)] (maybe_type (Name_type_1 "A")))),
+        ("S", (Single_expression_2 "s", gate_type_1)),
+        ("S'", (Single_expression_2 "sdg", gate_type_1)),
+        ("T", (Single_expression_2 "t", gate_type_1)),
+        ("T'", (Single_expression_2 "tdg", gate_type_1)),
+        ("Take", (Take_expression_2, Basic_type_1 [] qbit_type)),
+        ("True", (Algebraic_expression_2 "True" [], Basic_type_1 [] logical_type)),
+        ("Unit", (Struct_expression_2 empty, Basic_type_1 [] (Name_type_1 "Unit"))),
+        (
+          "Wrap",
+          (Function_expression_2 (Name_pattern "x") (Algebraic_expression_2 "Wrap" [Name_expression_2 "x"]),
+          Basic_type_1
+            [("A", Star_kind)]
+            (function_type (Name_type_1 "A") (Application_type_1 (Name_type_1 "Maybe") (Name_type_1 "A"))))),
+        ("X", (Single_expression_2 "x", gate_type_1)),
+        ("Y", (Single_expression_2 "y", gate_type_1)),
+        ("Z", (Single_expression_2 "z", gate_type_1))]
   find_and_delete :: Ord t => Map t u -> t -> Maybe (u, Map t u)
   find_and_delete a b = (\c -> (c, Data.Map.delete b a)) <$> Data.Map.lookup b a
-  finite_type :: Type_1
-  finite_type = Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N")
   function_type :: Type_1 -> Type_1 -> Type_1
   function_type = Application_type_1 <$> Application_type_1 (Name_type_1 "Function")
   gate_type_1 :: Type_1'
@@ -164,7 +186,7 @@ module Typing where
   ice :: t
   ice = error "Internal compiler error."
   init_type_context :: File
-  init_type_context = File (old kinds) (old algebraics) (old constrs) (old types)
+  init_type_context = File (old kinds) (old algebraics) (old constrs) (old (snd <$> defs_and_types))
   ins_new :: String -> t -> Map' (t, Status) -> Map' (t, Status)
   ins_new a b = insert a (b, New)
   int_type :: Type_1
@@ -175,12 +197,12 @@ module Typing where
       [
         ("Array", Arrow_kind Star_kind Star_kind),
         ("Creg", Star_kind),
-        ("Finite", Arrow_kind Hash_kind Star_kind),
         ("Function", Arrow_kind Star_kind (Arrow_kind Star_kind Star_kind)),
         ("Int", Star_kind),
         ("Logical", Star_kind),
         ("Maybe", Arrow_kind Star_kind Star_kind),
-        ("Qbit", Star_kind)]
+        ("Qbit", Star_kind),
+        ("Unit", Star_kind)]
   location_err' :: String -> Location_1 -> Location_1 -> String
   location_err' a b = location_err a (Library b)
   logical_type :: Type_1
@@ -195,7 +217,6 @@ module Typing where
     Name_type_1 c -> Name_type_1 (case Data.Map.lookup c a of
       Just d -> d
       Nothing -> c)
-    _ -> b
   solvesys :: String -> Map' ((Kind, Status), Status') -> [(Type_1, Type_1)] -> Err ()
   solvesys m a b = case b of
     [] -> Right ()
@@ -203,11 +224,6 @@ module Typing where
       Application_type_1 e f -> case d of
         Application_type_1 h i -> solvesys m a ((e, h) : (f, i) : g)
         Name_type_1 h -> solvesys' m a h c g
-        _ -> Left m
-      Int_type_1 e -> case d of
-        Int_type_1 f -> if e == f then solvesys m a g else Left m
-        Name_type_1 f -> solvesys' m a f c g
-        _ -> Left m
       Name_type_1 e -> case d of
         Name_type_1 f ->
           let
@@ -240,7 +256,6 @@ module Typing where
       case c of
         Application_type_1 d e -> Application_type_1 (f d) (f e)
         Name_type_1 d -> if d == a then b else c
-        _ -> c
   type_case :: (Location_0 -> Location_1) -> Name -> Map' String -> [Pattern_0] -> [Type_1] -> Types -> Err Types
   type_case j (m @ (Name k l)) a b c d = case b of
     [] -> Right d
@@ -390,11 +405,6 @@ module Typing where
             (
               (\(l, m, n, q, u) -> (Application_expression_2 i l, m, n, q, u)) <$>
               type_expression v w r p t j k d g (Name_type_1 (show o))))
-      Finite_expression_1 c g ->
-        if c < g then
-          Right (Finite_expression_2 c, f, (e, Int_type_1 g) : h, o, s)
-        else
-          Left ("Invalid Finite " ++ show c ++ " # " ++ show g ++ x')
       Function_expression_1 c g ->
         (
           (\(a', b', c', d', e') -> (Function_expression_2 c a', b', c', d', e')) <$>
@@ -591,7 +601,6 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
           else
             x
         _ -> x
-      Int_type_0 b -> if e == Hash_kind then Right (Int_type_1 b) else x
       Name_type_0 f -> case Data.Map.lookup f d of
         Just (g, _) -> if g == e then Right (Name_type_1 f) else x
         Nothing -> Left ("Undefined type " ++ f ++ location' (l a))
@@ -600,7 +609,6 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
     Application_type_0 e f -> type_type' l e d >>= \(g, h) -> case h of
       Arrow_kind i j -> (\k -> (Application_type_1 g k, j)) <$> type_type l f d i
       _ -> Left ("Kind mismatch" ++ location' (l a))
-    Int_type_0 b -> Right (Int_type_1 b, Hash_kind)
     Name_type_0 e -> case Data.Map.lookup e d of
       Just (f, _) -> Right (Name_type_1 e, f)
       Nothing -> Left ("Undefined type " ++ e ++ location' (l a))
@@ -608,66 +616,6 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
   type_types f a b = case a of
     [] -> Right []
     c : d -> type_type f c b Star_kind >>= \e -> (:) e <$> type_types f d b
-  types :: Map' Type_1'
-  types =
-    fromList
-      [
-        ("Add_Finite", Basic_type_1 [("N", Hash_kind)] (function_type finite_type (function_type finite_type finite_type))),
-        ("Add_Int", Basic_type_1 [] (function_type int_type (function_type int_type int_type))),
-        (
-          "Array",
-          Basic_type_1
-            [("U", Star_kind)]
-            (function_type
-              int_type
-              (function_type (function_type int_type (Name_type_1 "U")) (maybe_type (array_type (Name_type_1 "U")))))),
-        ("CCX", Basic_type_1 [] (function_type qbit_type (function_type qbit_type (function_type qbit_type qbit_type)))),
-        ("CH", gate_type_2),
-        ("CX", gate_type_2),
-        ("CY", gate_type_2),
-        ("CZ", gate_type_2),
-        ("Convert_Finite", Basic_type_1 [("N", Hash_kind)] (function_type int_type finite_type)),
-        ("Crash", Basic_type_1 [("U", Star_kind)] (Name_type_1 "U")),
-        (
-          "Equal_Finite",
-          Basic_type_1 [("N", Hash_kind)] (function_type finite_type (function_type finite_type logical_type))),
-        ("Equal_Int", Basic_type_1 [] (function_type int_type (function_type int_type logical_type))),
-        ("False", Basic_type_1 [] logical_type),
-        ("H", gate_type_1),
-        (
-          "Index",
-          Basic_type_1
-            [("A", Star_kind)]
-            (function_type (array_type (Name_type_1 "A")) (function_type int_type (maybe_type (Name_type_1 "A"))))),
-        (
-          "Inverse_Finite",
-          Basic_type_1
-            [("N", Hash_kind)]
-            (function_type finite_type (Application_type_1 (Name_type_1 "Maybe") finite_type))),
-        ("Length", Basic_type_1 [("A", Star_kind)] (function_type (array_type (Name_type_1 "A")) int_type)),
-        ("Less_Int", Basic_type_1 [] (function_type int_type (function_type int_type logical_type))),
-        ("Measure", Basic_type_1 [] (function_type (array_type qbit_type) creg_type)),
-        ("Mod_Int", Basic_type_1 [] (function_type int_type (function_type int_type int_type))),
-        (
-          "Multiply_Finite",
-          Basic_type_1 [("N", Hash_kind)] (function_type finite_type (function_type finite_type finite_type))),
-        ("Multiply_Int", Basic_type_1 [] (function_type int_type (function_type int_type int_type))),
-        ("Negate_Int", Basic_type_1 [] (function_type int_type int_type)),
-        ("Nothing", Basic_type_1 [("U", Star_kind)] (Application_type_1 (Name_type_1 "Maybe") (Name_type_1 "U"))),
-        ("S", gate_type_1),
-        ("S'", gate_type_1),
-        ("T", gate_type_1),
-        ("T'", gate_type_1),
-        ("Take", Basic_type_1 [] qbit_type),
-        ("True", Basic_type_1 [] logical_type),
-        (
-          "Wrap",
-          Basic_type_1
-            [("U", Star_kind)]
-            (function_type (Name_type_1 "U") (Application_type_1 (Name_type_1 "Maybe") (Name_type_1 "U")))),
-        ("X", gate_type_1),
-        ("Y", gate_type_1),
-        ("Z", gate_type_1)]
   typevar ::
     (String -> String) ->
     (String, Kind) ->

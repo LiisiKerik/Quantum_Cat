@@ -23,7 +23,6 @@ module Tokenise where
     Comma_token |
     Def_token |
     Default_token |
-    Hash_token |
     Int_token Integer |
     Left_curly_token |
     Left_round_token |
@@ -56,7 +55,6 @@ module Tokenise where
   char a = case a of
     '\n' -> Newline_char
     ' ' -> Space_char
-    '#' -> Delimiter_char Hash_token
     '(' -> Delimiter_char Left_round_token
     ')' -> Delimiter_char Right_round_token
     ',' -> Delimiter_char Comma_token
@@ -73,7 +71,7 @@ module Tokenise where
         [
           (flip
             elem
-            ['!', '$', '%', '&', '*', '+', '-', '.', ':', ';', '|', '<', '=', '>', '?', '@', '\\', '^'], Operator_char),
+            ['!', '#', '$', '%', '&', '*', '+', '-', '.', ':', ';', '|', '<', '=', '>', '?', '@', '\\', '^'], Operator_char),
           (isDigit, Int_char)]
         Name_char)
           a

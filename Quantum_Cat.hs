@@ -68,6 +68,8 @@ check_imports a b @ (f, h, l, k) c = case c of
 context_union :: File -> File -> File
 context_union (File b i j d) (File f k l h) =
   File (Data.Map.union b f) (Data.Map.union i k) (Data.Map.union j l) (Data.Map.union d h)
+defs :: Map' Expression_2
+defs = fst <$> defs_and_types
 err :: String -> IO (Err t)
 err = return <$> Left
 eval' :: [String] -> String -> IO (Err String)

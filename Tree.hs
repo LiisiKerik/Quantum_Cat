@@ -11,14 +11,13 @@ module Tree where
   data Expression_0 = Expression_0 Location_0 Expression_branch_0 deriving Show
   data Expression_branch_0 =
     Application_expression_0 Expression_0 Expression_0 |
-    Finite_expression_0 Integer Integer |
     Function_expression_0 Pattern_1 Expression_0 |
     Int_expression_0 Integer |
     Match_expression_0 Expression_0 Matches_0 |
     Name_expression_0 String
       deriving Show
   data Form_0 = Form_0 Name [Type_0] deriving Show
-  data Kind = Arrow_kind Kind Kind | Hash_kind | Star_kind deriving (Eq, Show)
+  data Kind = Arrow_kind Kind Kind | Star_kind deriving (Eq, Show)
   data Match_Algebraic_0 = Match_Algebraic_0 Name [Pattern_1] Expression_0 deriving Show
   data Match_Int_0 = Match_Int_0 Integer Expression_0 deriving Show
   data Matches_0 = Matches_Algebraic_0 [Match_Algebraic_0] (Maybe Expression_0) | Matches_Int_0 [Match_Int_0] Expression_0
@@ -30,7 +29,7 @@ module Tree where
   data State = State Tokens Location_0 deriving Show
   data Tree_0 = Tree_0 [Data_0] [Def_0] deriving Show
   data Tree_1 = Tree_1 [Name] Tree_0 deriving Show
-  data Type_branch_0 = Application_type_0 Type_0 Type_0 | Int_type_0 Integer | Name_type_0 String deriving Show
+  data Type_branch_0 = Application_type_0 Type_0 Type_0 | Name_type_0 String deriving Show
   data Type_0 = Type_0 Location_0 Type_branch_0 deriving Show
   class Get_location t where
     get_location :: t -> Location_0
@@ -114,7 +113,7 @@ module Tree where
   parse_bracketed_type :: Parser Type_0
   parse_bracketed_type = Type_0 <&> (parse_name_type <|> parse_round parse_application_type)
   parse_bracketed_kind :: Parser Kind
-  parse_bracketed_kind = parse_round parse_arrow_kind <|> parse_hash_kind <|> parse_star_kind
+  parse_bracketed_kind = parse_round parse_arrow_kind <|> parse_star_kind
   parse_brackets :: Token_0 -> Parser t -> Token_0 -> Parser t
   parse_brackets a b c = parse_token a *> b <* parse_token c
   parse_colon :: Parser ()
@@ -141,7 +140,7 @@ module Tree where
         Just i -> Right (i, (State (Tokens g c) h))
         Nothing -> Left h)
   parse_elementary_expression :: Parser Expression_branch_0
-  parse_elementary_expression = parse_finite <|> parse_int_expression <|> parse_name_expression
+  parse_elementary_expression = parse_int_expression <|> parse_name_expression
   parse_error :: (Location_0 -> Location_1) -> Location_0 -> Err t
   parse_error a b = Left ("Parse error" ++ location' (a b))
   parse_expression :: String -> Err Expression_0
@@ -150,24 +149,18 @@ module Tree where
   parse_expression' = Expression_0 <&> parse_expression_branch
   parse_expression_branch :: Parser Expression_branch_0
   parse_expression_branch = parse_composite_expression <|> parse_elementary_expression
-  parse_finite :: Parser Expression_branch_0
-  parse_finite = Finite_expression_0 <$> parse_int <* parse_token Hash_token <*> parse_int
   parse_form :: Parser Form_0
   parse_form = Form_0 <$> parse_name' <*> parse_optional parse_round parse_type
   parse_function :: Parser Expression_branch_0
   parse_function = parse_arrow' (Function_expression_0 <$> parse_pattern_1)
-  parse_hash_kind :: Parser Kind
-  parse_hash_kind = Hash_kind <$ parse_token Hash_token
   parse_int :: Parser Integer
   parse_int = parse_elementary (\a -> case a of
     Int_token b -> Just b
     _ -> Nothing)
   parse_int_expression :: Parser Expression_branch_0
   parse_int_expression = Int_expression_0 <$> parse_int
-  parse_int_type :: Parser Type_branch_0
-  parse_int_type = Int_type_0 <$> parse_int
   parse_kind :: Parser Kind
-  parse_kind = parse_arrow_kind <|> parse_hash_kind <|> parse_star_kind
+  parse_kind = parse_arrow_kind <|> parse_star_kind
   parse_kinds :: Parser [(Name, Kind)]
   parse_kinds = parse_arguments (\a -> parse_brackets Left_square_token a Right_square_token) parse_name' parse_kind
   parse_list :: Integer -> Parser t -> Parser [t]
@@ -247,7 +240,7 @@ module Tree where
   parse_type :: Parser Type_0
   parse_type = Type_0 <&> parse_type_branch
   parse_type_branch :: Parser Type_branch_0
-  parse_type_branch = parse_application_type <|> parse_int_type <|> parse_name_type
+  parse_type_branch = parse_application_type <|> parse_name_type
   state_location :: State -> Location_0
   state_location (State (Tokens a b) _) = case a of
     [] -> b
