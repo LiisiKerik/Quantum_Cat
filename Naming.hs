@@ -68,6 +68,7 @@ module Naming where
           "Less_Int",
           "Logical",
           "Maybe",
+          "Measure",
           "Mod_Int",
           "Multiply_Finite",
           "Multiply_Int",

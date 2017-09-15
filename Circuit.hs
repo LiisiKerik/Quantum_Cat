@@ -8,7 +8,8 @@ module Circuit where
   import Tree
   import Typing
   data Circuit = Circuit Integer [Integer] Integer Integer [Gate] deriving Show
-  data Gate = Unitary Gate' | If_g Integer Integer Integer [Gate'] [Integer] | Mea_g Integer Integer Integer deriving Show
+  data Gate = Unitary Gate' | If_g Integer Integer Integer [Gate'] [Integer] | Measure_gate Integer Integer Integer
+    deriving Show
   data Gate' = CCX_gate Integer Integer Integer | Double_gate String Integer Integer | Single_gate String Integer
     deriving Show
   data Expression_3 =
@@ -42,6 +43,7 @@ module Circuit where
     Length_expression_3 |
     Less_Int_expression_3 |
     Less_Int_expression'_3 Integer |
+    Measure_expression_3 |
     Mod_Int_expression_3 |
     Mod_Int_expression'_3 Integer |
     Multiply_Finite_expression_3 Integer |
@@ -53,8 +55,12 @@ module Circuit where
     Single_expression_3 String |
     Struct_expression_3 (Map' Expression_3)
       deriving Show
+  add_creg :: Integer -> Circuit -> (Integer, Circuit)
+  add_creg n (Circuit cc c q cg g) = (cc, Circuit (cc + 1) (n : c) q cg g)
   add_g :: Circuit -> Gate' -> Circuit
   add_g (Circuit cc c q cg t) h = Circuit cc c q (cg + 1) (Unitary h : t)
+  add_measure :: Integer -> Integer -> Integer -> Circuit -> Circuit
+  add_measure x y z (Circuit cc c q cg g) = Circuit cc c q (cg + 1) (Measure_gate x y z : g)
   circuit :: Defs -> Expression_2 -> Err (Circuit, Integer)
   circuit a b = circuit' (Left <$> a) (Circuit 0 [] 0 0 []) b >>= \(c, d) -> case d of
     Crash_expression_3 -> code_err "Crash."
@@ -130,7 +136,7 @@ module Circuit where
           _ -> ice)
         Equal_Finite_expression'_3 k -> r (case j of
           Crash_expression_3 -> Crash_expression_3
-          Finite_expression_3 l -> Algebraic_expression_3 (show (k == l)) []
+          Finite_expression_3 l -> logical_algebraic (k == l)
           _ -> ice)
         Equal_Int_expression_3 -> r (case j of
           Crash_expression_3 -> Crash_expression_3
@@ -138,7 +144,7 @@ module Circuit where
           _ -> ice)
         Equal_Int_expression'_3 k -> r (case j of
           Crash_expression_3 -> Crash_expression_3
-          Int_expression_3 l -> Algebraic_expression_3 (show (k == l)) []
+          Int_expression_3 l -> logical_algebraic (k == l)
           _ -> ice)
         Field_expression_3 k -> r (case j of
           Crash_expression_3 -> Crash_expression_3
@@ -159,16 +165,13 @@ module Circuit where
         Index_expression'_3 k l -> r (case j of
           Crash_expression_3 -> Crash_expression_3
           Int_expression_3 n ->
-            if n < 0 || n > k then
-              Algebraic_expression_3 "Nothing" []
-            else
-              Algebraic_expression_3 "Wrap" [l !! fromInteger n]
+            if n < 0 || n > k then nothing_algebraic else wrap_algebraic (l !! fromInteger n)
           _ -> ice)
         Inverse_Finite_expression_3 k -> r (case j of
           Crash_expression_3 -> Crash_expression_3
           Finite_expression_3 l -> case div_finite k 1 l of
-            Just n -> Algebraic_expression_3 "Wrap" [Finite_expression_3 n]
-            Nothing -> Algebraic_expression_3 "Nothing" []
+            Just n -> wrap_algebraic (Finite_expression_3 n)
+            Nothing -> nothing_algebraic
           _ -> ice)
         Length_expression_3 -> r (case j of
           Array_expression_3 k _ -> Int_expression_3 k
@@ -180,8 +183,17 @@ module Circuit where
           _ -> ice)
         Less_Int_expression'_3 k -> r (case j of
           Crash_expression_3 -> Crash_expression_3
-          Int_expression_3 l -> Algebraic_expression_3 (show (k < l)) []
+          Int_expression_3 l -> logical_algebraic (k < l)
           _ -> ice)
+        Measure_expression_3 -> case j of
+          Array_expression_3 k l ->
+            let
+              (x, y) = add_creg k b
+            in case measure x 0 y l of
+              Left n -> Right (n, Crash_expression_3)
+              Right n -> Right (n, Creg_expression_3 x)
+          Crash_expression_3 -> r Crash_expression_3
+          _ -> ice
         Mod_Int_expression_3 -> r (case j of
           Crash_expression_3 -> Crash_expression_3
           Int_expression_3 k -> Mod_Int_expression'_3 k
@@ -249,6 +261,7 @@ module Circuit where
               Just o -> o
               Nothing -> j)
             _ -> ice
+      Measure_expression_2 -> f Measure_expression_3
       Mod_Int_expression_2 -> f Mod_Int_expression_3
       Multiply_Finite_expression_2 d -> f (Multiply_Finite_expression_3 d)
       Multiply_Int_expression_2 -> f Multiply_Int_expression_3
@@ -297,4 +310,17 @@ module Circuit where
     Nothing -> Right (b, empty)
   eval_take :: Circuit -> Err (Circuit, Expression_3)
   eval_take (Circuit cc c q cg g) = Right (Circuit cc c (q + 1) cg g, Qbit_expression_3 q)
+  measure :: Integer -> Integer -> Circuit -> [Expression_3] -> Either Circuit Circuit
+  measure f g a b = case b of
+    [] -> Right a
+    c : d -> case c of
+      Crash_expression_3 -> Left a
+      Qbit_expression_3 e -> measure f (g + 1) (add_measure e f g a) d
+      _ -> ice
+  logical_algebraic :: Bool -> Expression_3
+  logical_algebraic a = Algebraic_expression_3 (show a) []
+  nothing_algebraic :: Expression_3
+  nothing_algebraic = Algebraic_expression_3 "Nothing" []
+  wrap_algebraic :: Expression_3 -> Expression_3
+  wrap_algebraic a = Algebraic_expression_3 "Wrap" [a]
 -----------------------------------------------------------------------------------------------------------------------------

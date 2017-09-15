@@ -1,6 +1,5 @@
 {-
 HIGHEST PRIORITY
-measurement
 if gate
 let expression
 constructor for arrays [x0, x1, x2, ...] in addition to existing length-and-index constructor
@@ -39,6 +38,7 @@ gather naming and type errors and give a list instead of giving only the first o
 internal: remove locations from expressions except from lowest-level things where some checks are necessary (finite, name)?
 switch expression that is less strict and more flexible than match?
 generalise if gate to work on different kinds of structs, not only on cregs?
+change how crash works? wrap expr_3 in maybe, make constructors give crash as a result when they get crash as argument?
 -}
 -----------------------------------------------------------------------------------------------------------------------------
 {-# OPTIONS_GHC -Wall #-}
@@ -73,6 +73,7 @@ module Typing where
     Length_expression_2 |
     Less_Int_expression_2 |
     Match_expression_2 Expression_2 Matches_2 |
+    Measure_expression_2 |
     Mod_Int_expression_2 |
     Multiply_Finite_expression_2 Integer |
     Multiply_Int_expression_2 |
@@ -115,6 +116,8 @@ module Typing where
     _ -> Right Hash_kind
   constrs :: Map' String
   constrs = fromList [("False", "Logical"), ("Nothing", "Maybe"), ("True", "Logical"), ("Wrap", "Maybe")]
+  creg_type :: Type_1
+  creg_type = Name_type_1 "Creg"
   defs :: Map' Expression_2
   defs =
     fromList
@@ -133,6 +136,7 @@ module Typing where
         ("Index", Index_expression_2),
         ("Length", Length_expression_2),
         ("Less_Int", Less_Int_expression_2),
+        ("Measure", Measure_expression_2),
         ("Mod_Int", Mod_Int_expression_2),
         ("Multiply_Int", Multiply_Int_expression_2),
         ("Negate_Int", Negate_Int_expression_2),
@@ -642,6 +646,7 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
             (function_type finite_type (Application_type_1 (Name_type_1 "Maybe") finite_type))),
         ("Length", Basic_type_1 [("A", Star_kind)] (function_type (array_type (Name_type_1 "A")) int_type)),
         ("Less_Int", Basic_type_1 [] (function_type int_type (function_type int_type logical_type))),
+        ("Measure", Basic_type_1 [] (function_type (array_type qbit_type) creg_type)),
         ("Mod_Int", Basic_type_1 [] (function_type int_type (function_type int_type int_type))),
         (
           "Multiply_Finite",

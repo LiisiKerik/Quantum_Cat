@@ -37,7 +37,7 @@ module Optimise where
               y' = (!!) q <$> fromInteger <$> y
             in
               iff (x' : y') [ifc x' x] (zipWith ifq y' y)
-          Mea_g x y _ ->
+          Measure_gate x y _ ->
             let
               x' = q !! fromInteger x
               y' = snd (c !! fromInteger (cc - y - 1))
@@ -83,7 +83,7 @@ module Optimise where
       Double_gate f x y -> Double_gate f (q x) (q y)
       Single_gate f x -> Single_gate f (q x))
     If_g x y a f z -> If_g (c x) y a f (q <$> z)
-    Mea_g x y z -> Mea_g (q x) (c y) z
+    Measure_gate x y z -> Measure_gate (q x) (c y) z
   update_c :: Integer -> Integer -> [(Integer, Bool)] -> [(Integer, Bool)]
   update_c x y = update_c' (x - y - 1)
   update_c' :: Integer -> [(Integer, Bool)] -> [(Integer, Bool)]

@@ -58,7 +58,7 @@ module Code where
             show y ++
             f ++
             cmm (brack_q <$> a))
-    Mea_g x y z -> (i, "measure " ++ brack_q x ++ " -> " ++ lookup' y c ++ brackets z)
+    Measure_gate x y z -> (i, "measure " ++ brack_q x ++ " -> " ++ lookup' y c ++ brackets z)
   encode_gates :: Integer -> [(Integer, String)] -> [Gate] -> [String]
   encode_gates i c g = case g of
     [] -> []
