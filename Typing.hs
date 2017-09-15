@@ -1,48 +1,44 @@
 {-
-LAMBDAS
-TYPE SYNONYMS
-ADD GATES (SEE QASM DOCUMENTATION ON GITHUB)
-NESTED DEFINITIONS
-CONSTRUCTOR FOR ARRAYS - SYNTACTIC SUGAR
-TODO: TURN ARRAYS INTO MAPS INTERNALLY TO REDUCE LOOKUP COMPLEXITY TO LOGARITHMIC?
-OPERATORS
-PRETTIER QASM CODE BY DEFINING COMPOSITE GATES IN THE CODE?
-OPTIMISATIONS IN GENERATED CIRCUIT. WIPE AND RE-USE OF BITS TO REDUCE THE REQUIRED AMOUNT OF MEMORY?
-ARRAY INDEXATION
-ALLOW MORE THAN 1-DIMENSIONAL CBIT ARRAYS (AND ALSO SINGLE CBITS) AS OUTPUTS?
-NECESSARY OPERATIONS FOR INTS, BOOLS
-CASE EXPRESSIONS FOR VALUES - SWITCH
-MAKE MATCH WORK WITH FINITE AND INT
-UNUSED PARAMETER WARNINGS
-A DEFAULT CASE IN ALGEBRAIC DATA TYPE MATCHING
-ADD FUNCTION COMPOSITION, S-COMBINATOR, IDENTITY, CONST, ETC...
-MAKE CASE LISTING [MATCH_TREE] A LOOKUP TABLE / MAP INSTEAD?
-ADDITION EXAMPLE (BOTH WITH BUILT-IN AND HOME-MADE TOFFOLI GATES)
-GRAPH EXAMPLES
-TEST SEVERAL VERSIONS OF RANDOM NUMBER GENERATION, WITH MORE AND LESS THINGS INLINED
-ADD SOMETHING FOR EASILY UPDATING FIELDS OF STRUCTS
-GENERALISE IF GATE TO WORK ON DIFFERENT KINDS OF STRUCTS, NOT ONLY ON CREGS?
-ABSTRACT METHODS
-CAN THERE BE DEAD CODE INSIDE SUBROUTINES? IF YES, CAN WE REMOVE IT?
-(CIRCUIT, VAL) -> (CIRCUIT, VAL) INSTEAD OF CIRCUIT -> VAL -> (CIRCUIT, VAL) IN FUNC_VAL?
-LIST AND VECTOR AGGREGATION. DIFFERENT WAYS OF ARRAY AGGREGATION
-REPLACE LAMBDAS CONTAINING PATTERN MATCHES OF ADT-S WITH CASE STATEMENTS FOR COMPILER SAFETY
-CHANGE LIFT SO THAT THE ORIGINAL THING THAT WE COPY IS REMOVED?
-ARRAY REVERSAL
-TYPE OPERATORS LIKE * AND \/
-SHOW AND READ FUNCTIONS
-SYNTACTIC SUGAR
-REMOVE LOCATIONS FROM EXPRESSIONS EXCEPT FROM LOWEST-LEVEL THINGS WHERE SOME CHECKS ARE NECESSARY (FINITE, NAME)?
-ETA REDUCTION WARNINGS?
-IF ELIF ... ELSE
-INCOMPLETE CASE ERROR. ALSO, MAKE SURE THAT NO DUPLICATE CASES ARE ALLOWED
-TEST WHETHER KINDS ARE OK (ENDING WITH A STAR)?
-UNUSED PARAMETER WARNINGS?
-UNNECESSARY IMPORT WARNINGS?
-PROTECTION AGAINST DUPLICATE FILE LOADING - WHAT HAPPENS NOW? IF CRASHES - FIX, GIVE A NICE ERROR. IF NOTHING HAPPENS - WARN?
-GATHER NAMING AND TYPE ERRORS AND GIVE A LIST INSTEAD OF GIVING ONLY THE FIRST ONE?
-ATTACH SCOPE TAGS TO KINDS ONCE INSTEAD OF DOING IT IN TYPE_KINDS?
-MONAD TO WRAP ALL QBIT-STUFF?
+HIGHEST PRIORITY
+measurement
+if gate
+let expression
+constructor for arrays [x0, x1, x2, ...] in addition to existing length-and-index constructor
+make match work with negative ints (modify parser)
+make type of take unit -> qbit
+check whether kinds of everything are ok (ending with a star) - potential failure to catch very stupid bugs
+addition of qnums. test it
+protection against duplicate file loading - what happens now? if crashes - fix, give a nice error/warning. if nothing - warn?
+implement all necessary operations for ints and bools
+get random number generation example to work
+graph examples
+foldm for log-depth array aggregation - probably necessary for more efficient circuits
+tests
+NICE-TO-HAVE
+type synonyms
+operators
+type operators
+prettier result code by letting user define composite gates which will be printed as subroutine in end code
+abstract methods
+optimisations in generated circuit. wipe and re-use of qbits and cregs to reduce the required amount of memory
+internal: attach scope tags to kinds once instead of doing it in type_kinds
+if-elif-else
+eta reduction warnings
+unused type variable warnings
+unused local variable warnings
+make match work with finite
+add something for easily changing fields of structs
+internal: do something with old/new status tags. check where exactly they're necessary. get rid of them where they're useless
+internal: with new matching error system, do we need to keep locations for each match? if not, modify parser/namer to remove
+change semantics of missing pattern-match variables from blank to lambda? (Left -> e is not Left _ -> e but Left x -> e x)
+OF QUESTIONABLE USEFULNESS
+internal: do something with the internal representation of arrays to reduce lookup complexity?
+allow more than 1-dimensional cbit arrays (and also single cbits) as outputs?
+linked lists?
+gather naming and type errors and give a list instead of giving only the first one?
+internal: remove locations from expressions except from lowest-level things where some checks are necessary (finite, name)?
+switch expression that is less strict and more flexible than match?
+generalise if gate to work on different kinds of structs, not only on cregs?
 -}
 -----------------------------------------------------------------------------------------------------------------------------
 {-# OPTIONS_GHC -Wall #-}
@@ -76,7 +72,7 @@ module Typing where
     Inverse_Finite_expression_2 Integer |
     Length_expression_2 |
     Less_Int_expression_2 |
-    Match_expression_2 Expression_2 Matches (Maybe Expression_2) |
+    Match_expression_2 Expression_2 Matches_2 |
     Mod_Int_expression_2 |
     Multiply_Finite_expression_2 Integer |
     Multiply_Int_expression_2 |
@@ -89,8 +85,10 @@ module Typing where
   data File = File Kinds Algebraics Constrs Types deriving Show
   data Form_2 = Form_2 String [Type_1] deriving Show
   type Kinds = Map' (Kind, Status)
-  data Match = Match [Pattern_0] Expression_2 deriving Show
-  type Matches = Map' Match
+  data Match_Algebraic_2 = Match_Algebraic_2 [Pattern_0] Expression_2 deriving Show
+  data Matches_2 =
+    Matches_Algebraic_2 (Map' Match_Algebraic_2) (Maybe Expression_2) | Matches_Int_2 (Map Integer Expression_2) Expression_2
+      deriving Show
   data Status' = Fixed | Flexible deriving Show
   data Type_1 = Application_type_1 Type_1 Type_1 | Int_type_1 Integer | Name_type_1 String deriving (Eq, Show)
   data Type_1' = Basic_type_1 [(String, Kind)] Type_1 | Local_type_1 Type_1 deriving Show
@@ -149,6 +147,8 @@ module Typing where
         ("X", Single_expression_2 "x"),
         ("Y", Single_expression_2 "y"),
         ("Z", Single_expression_2 "z")]
+  find_and_delete :: Ord t => Map t u -> t -> Maybe (u, Map t u)
+  find_and_delete a b = (\c -> (c, Data.Map.delete b a)) <$> Data.Map.lookup b a
   finite_type :: Type_1
   finite_type = Application_type_1 (Name_type_1 "Finite") (Name_type_1 "N")
   function_type :: Type_1 -> Type_1 -> Type_1
@@ -177,6 +177,8 @@ module Typing where
         ("Logical", Star_kind),
         ("Maybe", Arrow_kind Star_kind Star_kind),
         ("Qbit", Star_kind)]
+  location_err' :: String -> Location_1 -> Location_1 -> String
+  location_err' a b = location_err a (Library b)
   logical_type :: Type_1
   logical_type = Name_type_1 "Logical"
   maybe_type :: Type_1 -> Type_1
@@ -235,47 +237,14 @@ module Typing where
         Application_type_1 d e -> Application_type_1 (f d) (f e)
         Name_type_1 d -> if d == a then b else c
         _ -> c
-  type_case ::
-    Type_1 ->
-    Algebraics ->
-    Constrs ->
-    Types ->
-    (Location_0 -> Location_1) ->
-    String ->
-    Map' String ->
-    Map' [Type_1] ->
-    Match_1 ->
-    (Matches, Integer, Integer, [(Type_1, Type_1)], Map' ((Kind, Status), Status')) ->
-    Err (Matches, Integer, Integer, [(Type_1, Type_1)], Map' ((Kind, Status), Status'))
-  type_case y q r k i j a b (Match_1 (m @ (Name d e)) g h) (c, o, p, l, x) = case Data.Map.lookup e b of
-    Just f ->
-      (
-        type_case' i m a g f k >>=
-        \n -> (\(s, t, u, v, w) -> (insert e (Match g s) c, v, w, u, t)) <$> type_expression q r i o p x l n h y)
-    Nothing -> Left ("Undefined constructor " ++ e ++ " for algebraic data type " ++ j ++ location' (i d))
-  type_case' :: (Location_0 -> Location_1) -> Name -> Map' String -> [Pattern_0] -> [Type_1] -> Types -> Err Types
-  type_case' j (m @ (Name k l)) a b c d = case b of
+  type_case :: (Location_0 -> Location_1) -> Name -> Map' String -> [Pattern_0] -> [Type_1] -> Types -> Err Types
+  type_case j (m @ (Name k l)) a b c d = case b of
     [] -> Right d
     e : f -> case c of
       [] -> Left ("Constructor " ++ l ++ location (j k) ++ " has too many fields.")
-      g : h -> type_case' j m a f h (case e of
+      g : h -> type_case j m a f h (case e of
         Blank_pattern -> d
         Name_pattern i -> ins_new i (Local_type_1 (repl a g)) d)
-  type_cases ::
-    Type_1 ->
-    Algebraics ->
-    Constrs ->
-    Types ->
-    (Location_0 -> Location_1) ->
-    String ->
-    Map' String ->
-    Map' [Type_1] ->
-    [Match_1] ->
-    (Matches, Integer, Integer, [(Type_1, Type_1)], Map' ((Kind, Status), Status')) ->
-    Err (Matches, Integer, Integer, [(Type_1, Type_1)], Map' ((Kind, Status), Status'))
-  type_cases n k l j i h a b d c = case d of
-    [] -> Right c
-    e : f -> type_case n k l j i h a b e c >>= type_cases n k l j i h a b f
   type_data_1 :: Data_2 -> (Kinds, Constrs, Defs) -> (Kinds, Constrs, Defs)
   type_data_1 (Data_2 a b c) (i, j, k) =
     let
@@ -396,81 +365,102 @@ module Typing where
     Expression_1 ->
     Type_1 ->
     Err (Expression_2, Map' ((Kind, Status), Status'), [(Type_1, Type_1)], Integer, Integer)
-  type_expression v w r o s f h d (Expression_1 a b) e = case b of
-    Application_expression_1 c g ->
-      (
-        type_expression
-          v
-          w
-          r
-          (o + 1)
-          s
-          (insert (show o) ((Star_kind, New), Flexible) f)
-          h
-          d
-          c
-          (function_type (Name_type_1 (show o)) e) >>=
-        \(i, j, k, p, t) ->
+  type_expression v w r o s f h d (Expression_1 a b) e =
+    let
+      x' = location' (r a)
+    in case b of
+      Application_expression_1 c g ->
+        (
+          type_expression
+            v
+            w
+            r
+            (o + 1)
+            s
+            (insert (show o) ((Star_kind, New), Flexible) f)
+            h
+            d
+            c
+            (function_type (Name_type_1 (show o)) e) >>=
+          \(i, j, k, p, t) ->
+            (
+              (\(l, m, n, q, u) -> (Application_expression_2 i l, m, n, q, u)) <$>
+              type_expression v w r p t j k d g (Name_type_1 (show o))))
+      Finite_expression_1 c g ->
+        if c < g then
+          Right (Finite_expression_2 c, f, (e, Int_type_1 g) : h, o, s)
+        else
+          Left ("Invalid Finite " ++ show c ++ " # " ++ show g ++ x')
+      Function_expression_1 c g ->
+        (
+          (\(a', b', c', d', e') -> (Function_expression_2 c a', b', c', d', e')) <$>
+          type_expression
+            v
+            w
+            r
+            (o + 2)
+            s
+            (insert (show (o + 1)) ((Star_kind, New), Flexible) (insert (show o) ((Star_kind, New), Flexible) f))
+            ((e, function_type (Name_type_1 (show o)) (Name_type_1 (show (o + 1)))) : h)
+            (case c of
+              Blank_pattern -> d
+              Name_pattern i -> ins_new i (Local_type_1 (Name_type_1 (show o))) d)
+            g
+            (Name_type_1 (show (o + 1))))
+      Int_expression_1 c -> Right (Int_expression_2 c, f, (e, int_type) : h, o, s)
+      Match_expression_1 c g -> case g of
+        Matches_Algebraic_1 i j -> case i of
+          [] -> ice
+          Match_Algebraic_1 (Name _ l) _ _ : _ ->
+            let
+              y0 = "Match error" ++ x' ++ " Undefined algebraic constructors, incompatible constructors or conflicting cases"
+            in case Data.Map.lookup l w of
+              Just (m, _) ->
+                let
+                  (n, p, q) = fst (unsafe_lookup m v)
+                  (t, u) = typevars (flip (++) (show s)) n (empty, f)
+                  l0 = repl t q
+                in (
+                  type_expression v w r o (s + 1) u h d c l0 >>=
+                  \(x, y, a0, b0, c0) ->
+                    type_matches_algebraic v w r b0 c0 y a0 d empty i e p y0 t >>= \(d0, e0, f0, g0, h0, i0) ->
+                      let
+                        k0 = Match_expression_2 x <$> Matches_Algebraic_2 d0
+                      in if Data.Map.null i0 then case j of
+                        Just _ -> Left ("Unnecessary default case " ++ x')
+                        Nothing -> Right (k0 Nothing, e0, f0, g0, h0) else case j of
+                          Just j0 ->
+                            (
+                              (\(a', b', c', d', e') -> (k0 (Just a'), b', c', d', e')) <$>
+                              type_expression v w r g0 h0 e0 f0 d j0 l0)
+                          Nothing -> Left ("Incomplete match" ++ x'))
+              Nothing -> Left y0
+        Matches_Int_1 i j ->
           (
-            (\(l, m, n, q, u) -> (Application_expression_2 i l, m, n, q, u)) <$>
-            type_expression v w r p t j k d g (Name_type_1 (show o))))
-    Finite_expression_1 c g ->
-      if c > - 1 && c < g then
-        Right (Finite_expression_2 c, f, (e, Int_type_1 g) : h, o, s)
-      else
-        Left ("Invalid Finite" ++ location' (r a))
-    Function_expression_1 c g ->
-      (
-        (\(a', b', c', d', e') -> (Function_expression_2 c a', b', c', d', e')) <$>
-        type_expression
-          v
-          w
-          r
-          (o + 2)
-          s
-          (insert (show (o + 1)) ((Star_kind, New), Flexible) (insert (show o) ((Star_kind, New), Flexible) f))
-          ((e, function_type (Name_type_1 (show o)) (Name_type_1 (show (o + 1)))) : h)
-          (case c of
-            Blank_pattern -> d
-            Name_pattern i -> ins_new i (Local_type_1 (Name_type_1 (show o))) d)
-          g
-          (Name_type_1 (show (o + 1))))
-    Int_expression_1 c -> Right (Int_expression_2 c, f, (e, int_type) : h, o, s)
-    Match_expression_1 c g k -> case g of
-      [] -> ice
-      Match_1 (Name i0 i) _ _ : _ -> case Data.Map.lookup i w of
-        Just (x, _) ->
+            type_expression v w r o s f h d c (Name_type_1 "Int") >>=
+            \(k, l, m, n, p) ->
+              (
+                type_matches_int v w r n p l m d empty i e >>=
+                \(q, t, u, x, y) ->
+                  (
+                    (\(a0, b0, c0, d0, e0) -> (Match_expression_2 k (Matches_Int_2 q a0), b0, c0, d0, e0)) <$>
+                    type_expression v w r x y t u d j e)))
+      Name_expression_1 c -> case Data.Map.lookup c d of
+        Just (g, _) ->
           let
-            (y, z, a1) = fst (unsafe_lookup x v)
-            (b1, b2) = typevars (flip (++) (show s)) y (empty, f)
-          in (
-            type_expression v w r o (s + 1) b2 h d c (repl b1 a1) >>=
-            \(a0, b0, c0, d0, e0) -> type_cases e v w d r x b1 z g (empty, d0, e0, c0, b0) >>= \(f0, g0, h0, i', j') ->
-              let
-                j2 = Match_expression_2 a0 f0
-              in case k of
-                Just k' ->
-                  (\(f1, g1, h1, i1, j1) -> (j2 (Just f1), g1, h1, i1, j1)) <$> type_expression v w r g0 h0 j' i' d k' e
-                Nothing -> Right (j2 Nothing, j', i', g0, h0))
-        Nothing -> Left ("Undefined algebraic constructor " ++ i ++ location' (r i0))
-    Name_expression_1 c -> case Data.Map.lookup c d of
-      Just (g, _) ->
-        let
-          (k, l, m) = case g of
-            Basic_type_1 i j ->
+            (k, l, m) = case g of
+              Basic_type_1 i j ->
 {-
 INEFFICIENCY.
 ONE COULD CONSTRUCT AN IDENTITY MAP AND PUT IT INTO BASIC_TYPE AND THEN MAP (++ SUFFIX) OVER IT
 OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
 -}
-              let
-                (n, p) = type_kinds'' i s f
-              in
-                (n, repl p j, s + 1)
-            Local_type_1 i -> (f, i, s)
-        in
-          Right (Name_expression_2 c, k, (e, l) : h, o, m)
-      Nothing -> Left ("Undefined variable " ++ c ++ location' (r a))
+                let
+                  (n, p) = type_kinds'' i s f
+                in (n, repl p j, s + 1)
+              Local_type_1 i -> (f, i, s)
+          in Right (Name_expression_2 c, k, (e, l) : h, o, m)
+        Nothing -> Left ("Undefined variable " ++ c ++ x')
   type_field :: (Location_0 -> Location_1) -> (String, Type_0) -> Kinds -> Err (String, Type_1)
   type_field d (a, b) c = (,) a <$> type_type d b c Star_kind
   type_fields :: (Location_0 -> Location_1) -> [(String, Type_0)] -> Kinds -> Err [(String, Type_1)]
@@ -505,6 +495,86 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
         h = d ++ b
       in
         type_kinds_3 g b (insert h ((e, New), Flexible) f) (insert d h c)
+  type_match_algebraic ::
+    Algebraics ->
+    Constrs ->
+    (Location_0 -> Location_1) ->
+    Integer ->
+    Integer ->
+    Map' ((Kind, Status), Status') ->
+    [(Type_1, Type_1)] ->
+    Types ->
+    Map' Match_Algebraic_2 ->
+    Match_Algebraic_1 ->
+    Type_1 ->
+    Map' [Type_1] ->
+    String ->
+    Map' String ->
+    Err (Map' Match_Algebraic_2, Map' ((Kind, Status), Status'), [(Type_1, Type_1)], Integer, Integer, Map' [Type_1])
+  type_match_algebraic a b c d e f g h i (Match_Algebraic_1 (Name j k) l m) n o q r = case find_and_delete o k of
+    Just (p, y) ->
+      (
+        type_case c (Name j k) r l p h >>=
+        \s ->
+          (\(t, u, v, w, x) -> (insert k (Match_Algebraic_2 l t) i, u, v, w, x, y)) <$> type_expression a b c d e f g s m n)
+    Nothing -> Left q
+  type_match_int ::
+    Algebraics ->
+    Constrs ->
+    (Location_0 -> Location_1) ->
+    Integer ->
+    Integer ->
+    Map' ((Kind, Status), Status') ->
+    [(Type_1, Type_1)] ->
+    Types ->
+    Map Integer Expression_2 ->
+    Match_Int_1 ->
+    Type_1 ->
+    Err (Map Integer Expression_2, Map' ((Kind, Status), Status'), [(Type_1, Type_1)], Integer, Integer)
+  type_match_int a b c d e f g h i (Match_Int_1 j k) l =
+-- TODO: PUT A GOOD ERROR MESSAGE HERE. LOCATIONS AND STUFF.
+    (
+      type_expression a b c d e f g h k l >>=
+      \(m, n, o, p, q) ->
+        bimap (\_ -> location_err' ("cases for " ++ show j) undefined undefined) (\r -> (r, n, o, p, q)) (add i j m))
+  type_matches_algebraic ::
+    Algebraics ->
+    Constrs ->
+    (Location_0 -> Location_1) ->
+    Integer ->
+    Integer ->
+    Map' ((Kind, Status), Status') ->
+    [(Type_1, Type_1)] ->
+    Types ->
+    Map' Match_Algebraic_2 ->
+    [Match_Algebraic_1] ->
+    Type_1 ->
+    Map' [Type_1] ->
+    String ->
+    Map' String ->
+    Err (Map' Match_Algebraic_2, Map' ((Kind, Status), Status'), [(Type_1, Type_1)], Integer, Integer, Map' [Type_1])
+  type_matches_algebraic a b c d e f g h i j k s u v = case j of
+    [] -> Right (i, f, g, d, e, s)
+    l : m ->
+      (
+        type_match_algebraic a b c d e f g h i l k s u v >>=
+        \(n, o, p, q, r, t) -> type_matches_algebraic a b c q r o p h n m k t u v)
+  type_matches_int ::
+    Algebraics ->
+    Constrs ->
+    (Location_0 -> Location_1) ->
+    Integer ->
+    Integer ->
+    Map' ((Kind, Status), Status') ->
+    [(Type_1, Type_1)] ->
+    Types ->
+    Map Integer Expression_2 ->
+    [Match_Int_1] ->
+    Type_1 ->
+    Err (Map Integer Expression_2, Map' ((Kind, Status), Status'), [(Type_1, Type_1)], Integer, Integer)
+  type_matches_int a b c d e f g h i j k = case j of
+    [] -> Right (i, f, g, d, e)
+    l : m -> type_match_int a b c d e f g h i l k >>= \(n, o, p, q, r) -> type_matches_int a b c q r o p h n m k
   type_type :: (Location_0 -> Location_1) -> Type_0 -> Kinds -> Kind -> Err Type_1
   type_type l (Type_0 a c) d e =
     let

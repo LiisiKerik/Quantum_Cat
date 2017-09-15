@@ -14,12 +14,15 @@ module Tree where
     Finite_expression_0 Integer Integer |
     Function_expression_0 Pattern_1 Expression_0 |
     Int_expression_0 Integer |
-    Match_expression_0 Expression_0 [Match_0] (Maybe Expression_0) |
+    Match_expression_0 Expression_0 Matches_0 |
     Name_expression_0 String
       deriving Show
   data Form_0 = Form_0 Name [Type_0] deriving Show
   data Kind = Arrow_kind Kind Kind | Hash_kind | Star_kind deriving (Eq, Show)
-  data Match_0 = Match_0 Name [Pattern_1] Expression_0 deriving Show
+  data Match_Algebraic_0 = Match_Algebraic_0 Name [Pattern_1] Expression_0 deriving Show
+  data Match_Int_0 = Match_Int_0 Integer Expression_0 deriving Show
+  data Matches_0 = Matches_Algebraic_0 [Match_Algebraic_0] (Maybe Expression_0) | Matches_Int_0 [Match_Int_0] Expression_0
+    deriving Show
   data Name = Name Location_0 String deriving Show
   data Pattern_1 = Pattern_1 Location_0 Pattern_0 deriving Show
   data Pattern_0 = Blank_pattern | Name_pattern String deriving Show
@@ -89,6 +92,8 @@ module Tree where
   parse_arguments' a = parse_arguments parse_round a parse_type
   parse_arrow :: Parser ()
   parse_arrow = parse_operator "->"
+  parse_arrow' :: Parser (Expression_0 -> t) -> Parser t
+  parse_arrow' p = p <* parse_arrow <*> parse_expression'
   parse_arrow_kind :: Parser Kind
   parse_arrow_kind = Arrow_kind <$> parse_bracketed_kind <* parse_arrow <*> parse_kind
   parse_basic :: Parser Def_0
@@ -124,6 +129,8 @@ module Tree where
   parse_data' a b = Data_0 <$> parse_name'' a <*> parse_kinds <*> b
   parse_def :: Parser Def_0
   parse_def = parse_basic
+  parse_default :: Parser Expression_0
+  parse_default = parse_comma *> parse_token Default_token *> parse_arrow *> parse_expression'
   parse_elementary :: (Token_0 -> Maybe t) -> Parser t
   parse_elementary a = Parser (\(State (Tokens b c) d) -> case b of
     [] -> Left c
@@ -144,14 +151,11 @@ module Tree where
   parse_expression_branch :: Parser Expression_branch_0
   parse_expression_branch = parse_composite_expression <|> parse_elementary_expression
   parse_finite :: Parser Expression_branch_0
-  parse_finite =
-    (
-      parse_int >>=
-      \x -> parse_token Hash_token *> parse_int >>= \y -> if x < y then return (Finite_expression_0 x y) else empty)
+  parse_finite = Finite_expression_0 <$> parse_int <* parse_token Hash_token <*> parse_int
   parse_form :: Parser Form_0
   parse_form = Form_0 <$> parse_name' <*> parse_optional parse_round parse_type
   parse_function :: Parser Expression_branch_0
-  parse_function = Function_expression_0 <$> parse_pattern_1 <* parse_arrow <*> parse_expression'
+  parse_function = parse_arrow' (Function_expression_0 <$> parse_pattern_1)
   parse_hash_kind :: Parser Kind
   parse_hash_kind = Hash_kind <$ parse_token Hash_token
   parse_int :: Parser Integer
@@ -178,17 +182,26 @@ module Tree where
   parse_load = parse_name_3 Load_token ((flip (++) ".awf" <$> parse_name) <* parse_operator "." <* parse_name_4 "awf")
   parse_location :: Parser Location_0
   parse_location = Parser (\a -> Right (state_location a, a))
-  parse_match :: Parser Match_0
-  parse_match = Match_0 <$> parse_name' <*> many parse_pattern_1 <* parse_arrow <*> parse_expression'
+  parse_match_algebraic :: Parser Match_Algebraic_0
+  parse_match_algebraic = parse_arrow' (Match_Algebraic_0 <$> parse_name' <*> many parse_pattern_1)
   parse_match_expression :: Parser Expression_branch_0
   parse_match_expression =
-    Match_expression_0 <$
-    parse_token Match_token <*>
-    parse_expression' <*
-    parse_token Left_curly_token <*>
-    parse_list 2 parse_match <*>
-    (parse_comma *> parse_token Default_token *> parse_arrow *> (Just <$> parse_expression') <|> return Nothing) <*
-    parse_token Right_curly_token
+    (
+      Match_expression_0 <$
+      parse_token Match_token <*>
+      parse_expression' <*
+      parse_token Left_curly_token <*>
+      parse_matches <*
+      parse_token Right_curly_token)
+  parse_match_int :: Parser Match_Int_0
+  parse_match_int = parse_arrow' (Match_Int_0 <$> parse_int)
+  parse_matches :: Parser Matches_0
+  parse_matches = parse_matches_algebraic <|> parse_matches_int
+  parse_matches_algebraic :: Parser Matches_0
+  parse_matches_algebraic =
+    Matches_Algebraic_0 <$> parse_list 1 parse_match_algebraic <*> (Just <$> parse_default <|> return Nothing)
+  parse_matches_int :: Parser Matches_0
+  parse_matches_int = Matches_Int_0 <$> parse_list 1 parse_match_int <*> parse_default
   parse_name :: Parser String
   parse_name = parse_elementary (\a -> case a of
     Name_token b -> Just b

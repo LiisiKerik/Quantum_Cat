@@ -230,17 +230,25 @@ module Circuit where
       Inverse_Finite_expression_2 d -> f (Inverse_Finite_expression_3 d)
       Length_expression_2 -> f Length_expression_3
       Less_Int_expression_2 -> f Less_Int_expression_3
-      Match_expression_2 d e n -> circuit' a b d >>= \(g, h) -> case h of
-        Algebraic_expression_3 i j ->
-          let
-            o p = circuit' p g
-          in case Data.Map.lookup i e of
-            Just (Match k l) -> o (eval_match k j a) l
-            Nothing -> case n of
-              Just q -> o a q
-              Nothing -> ice
-        Crash_expression_3 -> m
-        _ -> ice
+      Match_expression_2 d e -> circuit' a b d >>= \(g, h) ->
+        let
+          n o = circuit' o g
+          s = n a
+        in case e of
+          Matches_Algebraic_2 i j -> case h of
+            Algebraic_expression_3 k l -> case Data.Map.lookup k i of
+              Just (Match_Algebraic_2 o p) -> n (eval_match o l a) p
+              Nothing -> case j of
+                Just o -> s o
+                Nothing -> ice
+            Crash_expression_3 -> m
+            _ -> ice
+          Matches_Int_2 i j -> case h of
+            Crash_expression_3 -> m
+            Int_expression_3 k -> s (case Data.Map.lookup k i of
+              Just o -> o
+              Nothing -> j)
+            _ -> ice
       Mod_Int_expression_2 -> f Mod_Int_expression_3
       Multiply_Finite_expression_2 d -> f (Multiply_Finite_expression_3 d)
       Multiply_Int_expression_2 -> f Multiply_Int_expression_3
