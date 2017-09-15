@@ -28,6 +28,7 @@ add something for easily changing fields of structs
 internal: do something with old/new status tags. check where exactly they're necessary. get rid of them where they're useless
 internal: with new matching error system, do we need to keep locations for each match? if not, modify parser/namer to remove
 change semantics of missing pattern-match variables from blank to lambda? (Left -> e is not Left _ -> e but Left x -> e x)
+internal: make the system of specifying built-in algebraic data types and things better and safer
 OF QUESTIONABLE USEFULNESS
 internal: do something with the internal representation of arrays to reduce lookup complexity?
 allow more than 1-dimensional cbit arrays (and also single cbits) as outputs?
@@ -163,9 +164,9 @@ module Typing where
         ("S'", (Single_expression_2 "sdg", gate_type_1)),
         ("T", (Single_expression_2 "t", gate_type_1)),
         ("T'", (Single_expression_2 "tdg", gate_type_1)),
-        ("Take", (Take_expression_2, Basic_type_1 [] qbit_type)),
+        ("Take", (Take_expression_2, Basic_type_1 [] (function_type unit_type qbit_type))),
         ("True", (Algebraic_expression_2 "True" [], Basic_type_1 [] logical_type)),
-        ("Unit", (Struct_expression_2 empty, Basic_type_1 [] (Name_type_1 "Unit"))),
+        ("Unit", (Struct_expression_2 empty, Basic_type_1 [] unit_type)),
         (
           "Wrap",
           (Function_expression_2 (Name_pattern "x") (Algebraic_expression_2 "Wrap" [Name_expression_2 "x"]),
@@ -640,6 +641,8 @@ OR SUFFIX COULD BE GIVEN AS ARGUMENT TO REPL AND ADDED INSIDE REPL
       type_datas k a d >>=
       \(File e b h g, f) ->
         (\(i, j) -> (File (rem_old e) (rem_old b) (rem_old h) (rem_old j), i)) <$> type_defs k c (e, b, h) (f, g))
+  unit_type :: Type_1
+  unit_type = Name_type_1 "Unit"
   unsafe_lookup :: String -> Map' t -> t
   unsafe_lookup a b = case Data.Map.lookup a b of
     Just c -> c

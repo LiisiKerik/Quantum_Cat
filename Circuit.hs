@@ -44,7 +44,8 @@ module Circuit where
     Negate_Int_expression_3 |
     Qbit_expression_3 Integer |
     Single_expression_3 String |
-    Struct_expression_3 (Map' Expression_3)
+    Struct_expression_3 (Map' Expression_3) |
+    Take_expression_3
       deriving Show
   add_creg :: Integer -> Circuit -> (Integer, Circuit)
   add_creg n (Circuit cc c q cg g) = (cc, Circuit (cc + 1) (n : c) q cg g)
@@ -182,6 +183,7 @@ module Circuit where
             Crash_expression_3 -> (i, Crash_expression_3)
             Qbit_expression_3 l -> (add_g i (Single_gate k l), j)
             _ -> ice)
+          Take_expression_3 -> eval_take b
           _ -> ice
       CCX_expression_2 -> f CCX_expression_3
       Construct_expression_2 -> f Construct_expression_3
@@ -222,7 +224,7 @@ module Circuit where
       Negate_Int_expression_2 -> f Negate_Int_expression_3
       Single_expression_2 d -> f (Single_expression_3 d)
       Struct_expression_2 d -> second Struct_expression_3 <$> eval_struct a b d
-      Take_expression_2 -> eval_take b
+      Take_expression_2 -> f Take_expression_3
   code_err :: String -> Err t
   code_err = Left <$> (++) "Code generation error. "
   construct_array ::
