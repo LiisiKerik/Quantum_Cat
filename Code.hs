@@ -4,7 +4,10 @@ module Code where
   import Circuit
   import Data.Bifunctor
   import Data.List
+  import Naming
   import Optimise
+  import Tokenise
+  import Tree
   import Typing
   brack :: String -> Integer -> String
   brack x y = x ++ brackets y
@@ -82,4 +85,12 @@ module Code where
   rgmnt_a = rgmnt "a"
   rgmnt_c :: Integer -> String
   rgmnt_c = rgmnt "c"
+  tokenise_parse_naming_typing_eval :: Locations -> File -> Defs -> String -> Err String
+  tokenise_parse_naming_typing_eval c (File f g h i) l b =
+    (
+      parse_expression b >>=
+      \e ->
+        (
+          naming_expression "input" e c >>=
+          \j -> type_expr' (Location_1 "input") (f, g, h, i) j >>= \a -> codefile <$> optimise <$> circuit l a))
 -----------------------------------------------------------------------------------------------------------------------------

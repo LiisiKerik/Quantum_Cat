@@ -12,7 +12,6 @@ get random number generation example to work
 graph examples
 foldm for log-depth array aggregation - probably necessary for more efficient circuits
 tests
-separate Quantum_Cat.hs into two files (one only containing main, the other a module) for easier testing
 NICE-TO-HAVE
 type synonyms
 operators
@@ -47,6 +46,7 @@ module Typing where
   import Data.Bifunctor
   import Data.Map
   import Naming
+  import Standard
   import Tokenise
   import Tree
   type Algebraics = Map' (([(String, Kind)], Map' [Type_1], Type_1), Status) -- TODO: REM STRINGS FROM FST MAP
@@ -110,8 +110,13 @@ module Typing where
     Name_type_1 d -> if d == c then Left j else Right (fst (fst (unsafe_lookup d a)))
   constrs :: Map' String
   constrs = fromList [("False", "Logical"), ("Nothing", "Maybe"), ("True", "Logical"), ("Wrap", "Maybe")]
+  context_union :: File -> File -> File
+  context_union (File b i j d) (File f k l h) =
+    File (Data.Map.union b f) (Data.Map.union i k) (Data.Map.union j l) (Data.Map.union d h)
   creg_type :: Type_1
   creg_type = Name_type_1 "Creg"
+  defs :: Map' Expression_2
+  defs = fst <$> defs_and_types
   defs_and_types :: Map' (Expression_2, Type_1')
   defs_and_types =
     fromList
@@ -213,6 +218,8 @@ module Typing where
   maybe_type = Application_type_1 (Name_type_1 "Maybe")
   qbit_type :: Type_1
   qbit_type = Name_type_1 "Qbit"
+  naming_typing :: String -> Tree_2 -> (Locations, File, Defs) -> Err (Locations, File, Defs)
+  naming_typing f a (b, c, g) = naming f a b >>= \(d, e) -> (\(h, i) -> (d, h, i)) <$> typing (Location_1 f) e (c, g)
   repl :: Map' String -> Type_1 -> Type_1
   repl a b = case b of
     Application_type_1 c d -> Application_type_1 (repl a c) (repl a d)

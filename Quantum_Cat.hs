@@ -1,11 +1,9 @@
 -----------------------------------------------------------------------------------------------------------------------------
 {-# OPTIONS_GHC -Wall #-}
-import Circuit
 import Code
 import Data.List
 import Data.Map
 import Naming
-import Optimise
 import Standard
 import System.Directory
 import System.Environment
@@ -65,11 +63,6 @@ check_imports a b @ (f, h, l, k) c = case c of
     case x of
       Left i -> err i
       Right (i, j, m, n) -> check_imports a (i, j, m, context_union k n) e
-context_union :: File -> File -> File
-context_union (File b i j d) (File f k l h) =
-  File (Data.Map.union b f) (Data.Map.union i k) (Data.Map.union j l) (Data.Map.union d h)
-defs :: Map' Expression_2
-defs = fst <$> defs_and_types
 err :: String -> IO (Err t)
 err = return <$> Left
 eval' :: [String] -> String -> IO (Err String)
@@ -103,14 +96,4 @@ main = do
                 putStrLn "Code generation successful!"
         _ -> putStrLn "Command compile expects at least 2 arguments."
       _ -> putStrLn ("Invalid command " ++ command ++ ".")
-naming_typing :: String -> Tree_2 -> (Locations, File, Defs) -> Err (Locations, File, Defs)
-naming_typing f a (b, c, g) = naming f a b >>= \(d, e) -> (\(h, i) -> (d, h, i)) <$> typing (Location_1 f) e (c, g)
-tokenise_parse_naming_typing_eval :: Locations -> File -> Defs -> String -> Err String
-tokenise_parse_naming_typing_eval c (File f g h i) l b =
-  (
-    parse_expression b >>=
-    \e ->
-      (
-        naming_expression "input" e c >>=
-        \j -> type_expr' (Location_1 "input") (f, g, h, i) j >>= \a -> codefile <$> optimise <$> circuit l a))
 -----------------------------------------------------------------------------------------------------------------------------
