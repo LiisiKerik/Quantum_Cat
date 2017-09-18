@@ -1,13 +1,7 @@
 `````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````
-~/
-  Hello World!
-  ~/
-    Testing whether nested multiline comments work...
-  /~
-/~
-Def H2{n} : Arr[Qbit]{n} -> Arr[Qbit]{n} = Map[Qbit, Qbit]{n}(H)
-Def Main : Creg = Random'
-Def Random'{n} : Creg{n} = Measure{n}(Uniform1{n})
-Def Take1{n} : Arr[Qbit]{n} = Lift[Qbit]{n}(Take)
-Def Uniform1{n} : Arr[Qbit]{n} = Lift[Qbit]{n}(Uniform)
+Load Algebra.qc
+Load Standard.qc
+Def Random_Qbit(_ : Unit) : Creg = Measure (Unsafe_Array 1 (_ -> Uniform_Qbit Unit))
+Def Random_Qint(x : Int) : Maybe Creg = Map_Maybe (Map_Function Measure qint) (Uniform_Qint x)
+Def Random_Qint_Unsafe(x : Int) : Creg = Unsafe_Maybe (Random_Qint x)
 `````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````

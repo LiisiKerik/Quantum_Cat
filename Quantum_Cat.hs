@@ -73,7 +73,7 @@ defs = fst <$> defs_and_types
 err :: String -> IO (Err t)
 err = return <$> Left
 eval' :: [String] -> String -> IO (Err String)
-eval' a b= do
+eval' a b = do
   c <- check_imports [] (empty, locations, defs, init_type_context) ((,) Language <$> a)
   return (c >>= \(_, e, f, g) -> tokenise_parse_naming_typing_eval e g f b)
 main :: IO ()

@@ -1,6 +1,10 @@
 `````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````
 Load Algebra.qc
-Def Take_Array(x : Int) : Maybe (Array Qbit) = Lift_Array x Take
-Def Uniform_Qbit : Qbit = H Take
-Def Uniform_Array_Qbit(x : Int) : Maybe (Array Qbit) = Lift_Array x Uniform_Qbit
+Struct Qint(qint : Array Qbit)
+Def H_Qint(x : Qint) : Qint = Qint (Map_Array H (qint x))
+Def Take_Qint(x : Int) : Maybe Qint = Map_Maybe Qint (Array x (_ -> Take Unit))
+Def Take_Qint_Unsafe(x : Int) : Qint = Unsafe_Maybe (Take_Qint x)
+Def Uniform_Qbit(_ : Unit) : Qbit = H (Take Unit)
+Def Uniform_Qint(x : Int) : Maybe Qint = Map_Maybe H_Qint (Take_Qint x)
+Def Uniform_Qint_Unsafe(x : Int) : Qint = Unsafe_Maybe (Uniform_Qint x)
 `````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````

@@ -4,7 +4,6 @@ if gate
 let expression
 constructor for arrays [x0, x1, x2, ...] in addition to existing length-and-index constructor
 make match work with negative ints (modify parser)
-make type of take :: unit -> qbit
 check whether kinds of everything are ok (ending with a star) - potential failure to catch very stupid bugs
 addition of qnums. test it
 protection against duplicate file loading - what happens now? if crashes - fix, give a nice error/warning. if nothing - warn?
@@ -13,6 +12,7 @@ get random number generation example to work
 graph examples
 foldm for log-depth array aggregation - probably necessary for more efficient circuits
 tests
+separate Quantum_Cat.hs into two files (one only containing main, the other a module) for easier testing
 NICE-TO-HAVE
 type synonyms
 operators
@@ -39,6 +39,7 @@ switch expression that is less strict and more flexible than match?
 generalise if gate to work on different kinds of structs, not only on cregs?
 change how crash works? wrap expr_3 in maybe, make constructors give crash as a result when they get crash as argument?
 prettier result code by letting user define composite gates which will be printed as subroutine in end code?
+there's too much safety now? wrapping all array operations in maybe seems silly. make wrong indexation etc crash instead?
 -}
 -----------------------------------------------------------------------------------------------------------------------------
 {-# OPTIONS_GHC -Wall #-}

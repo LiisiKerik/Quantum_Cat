@@ -172,7 +172,7 @@ module Tree where
     1 -> many (parse_comma *> b)
     _ -> parse_comma *> parse_list (a - 1) b
   parse_load :: Parser Name
-  parse_load = parse_name_3 Load_token ((flip (++) ".awf" <$> parse_name) <* parse_operator "." <* parse_name_4 "awf")
+  parse_load = parse_name_3 Load_token ((flip (++) ".qc" <$> parse_name) <* parse_operator "." <* parse_name_4 "qc")
   parse_location :: Parser Location_0
   parse_location = Parser (\a -> Right (state_location a, a))
   parse_match_algebraic :: Parser Match_Algebraic_0

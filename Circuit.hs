@@ -153,7 +153,7 @@ module Circuit where
           Measure_expression_3 -> case j of
             Array_expression_3 k l ->
               let
-                (x, y) = add_creg k b
+                (x, y) = add_creg k i
               in case measure x 0 y l of
                 Left n -> Right (n, Crash_expression_3)
                 Right n -> Right (n, Creg_expression_3 x)
