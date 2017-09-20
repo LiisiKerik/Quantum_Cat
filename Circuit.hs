@@ -213,8 +213,8 @@ module Circuit where
       Application_expression_2 d e -> Application_expression_2 (f d) (f e)
       Array_expression_2 d e -> Array_expression_2 d (f_list e)
       Function_expression_2 d e -> case d of
-        Blank_pattern -> c
-        Name_pattern g -> if g == a then c else Function_expression_2 d (f e)
+        Blank_pattern -> b
+        Name_pattern g -> if g == a then b else Function_expression_2 d (f e)
       Index'_expression_2 d e -> Index'_expression_2 d (f_list e)
       Match_expression_2 d e -> Match_expression_2 (f d) (case e of
         Matches_Algebraic_2 g h -> Matches_Algebraic_2 (subst_algebraic a c <$> g) (f <$> h)
