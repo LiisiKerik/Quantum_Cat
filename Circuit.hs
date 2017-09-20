@@ -12,41 +12,6 @@ module Circuit where
     deriving Show
   data Gate' = CCX_gate Integer Integer Integer | Double_gate String Integer Integer | Single_gate String Integer
     deriving Show
-  data Expression_3 =
-    Add_Int_expression_3 |
-    Add_Int_expression'_3 Integer |
-    Algebraic_expression_3 String [Expression_3] |
-    Array_expression_3 Integer [Expression_3] |
-    CCX_expression_3 |
-    CCX_expression'_3 Integer |
-    CCX_expression''_3 Integer Integer |
-    Construct_expression_3 |
-    Construct_expression'_3 Integer |
-    Crash_expression_3 |
-    Creg_expression_3 Integer |
-    Double_expression_3 String |
-    Double_expression'_3 String Integer |
-    Equal_Int_expression_3 |
-    Equal_Int_expression'_3 Integer |
-    Field_expression_3 String |
-    Function_expression_3 [(String, Expression_3)] Pattern_0 Expression_2 |
-    Index_expression_3 |
-    Index_expression'_3 Integer [Expression_3] |
-    Int_expression_3 Integer |
-    Length_expression_3 |
-    Less_Int_expression_3 |
-    Less_Int_expression'_3 Integer |
-    Measure_expression_3 |
-    Mod_Int_expression_3 |
-    Mod_Int_expression'_3 Integer |
-    Multiply_Int_expression_3 |
-    Multiply_Int_expression'_3 Integer |
-    Negate_Int_expression_3 |
-    Qbit_expression_3 Integer |
-    Single_expression_3 String |
-    Struct_expression_3 (Map' Expression_3) |
-    Take_expression_3
-      deriving Show
   add_creg :: Integer -> Circuit -> (Integer, Circuit)
   add_creg n (Circuit cc c q cg g) = (cc, Circuit (cc + 1) (n : c) q cg g)
   add_g :: Circuit -> Gate' -> Circuit
@@ -54,181 +19,157 @@ module Circuit where
   add_measure :: Integer -> Integer -> Integer -> Circuit -> Circuit
   add_measure x y z (Circuit cc c q cg g) = Circuit cc c q (cg + 1) (Measure_gate x y z : g)
   circuit :: Defs -> Expression_2 -> Err (Circuit, Integer)
-  circuit a b = circuit' (Left <$> a) (Circuit 0 [] 0 0 []) b >>= \(c, d) -> case d of
-    Crash_expression_3 -> code_err "Crash."
-    Creg_expression_3 e -> Right (c, e)
+  circuit a b = circuit' a (Circuit 0 [] 0 0 []) b >>= \(c, d) -> case d of
+    Crash_expression_2 -> code_err "Crash."
+    Creg_expression_2 e -> Right (c, e)
     _ -> ice
 -- TODO: MAYBE HERE IT'S UNNECESSARY TO HAVE ERR IN OUTPUT? CHECK AND REMOVE LATER, WHEN IMPLEMENTATION FINISHED
-  circuit' :: Map' (Either Expression_2 Expression_3) -> Circuit -> Expression_2 -> Err (Circuit, Expression_3)
+  circuit' :: Map' Expression_2 -> Circuit -> Expression_2 -> Err (Circuit, Expression_2)
   circuit' a b c =
     let
       f = Right <$> (,) b
-      m = f Crash_expression_3
+      m = f Crash_expression_2
     in case c of
-      Add_Int_expression_2 -> f Add_Int_expression_3
-      Algebraic_expression_2 d e -> second (Algebraic_expression_3 d) <$> eval_list a b e
       Application_expression_2 d e -> circuit' a b d >>= \(g, h) -> circuit' a g e >>= \(i, j) ->
         let
           r = Right <$> (,) i
         in case h of
-          Add_Int_expression_3 -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Int_expression_3 l -> Add_Int_expression'_3 l
+          Add_Int_expression_2 -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Int_expression_2 l -> Add_Int'_expression_2 l
             _ -> ice)
-          Add_Int_expression'_3 k -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Int_expression_3 n -> Int_expression_3 (k + n)
+          Add_Int'_expression_2 k -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Int_expression_2 n -> Int_expression_2 (k + n)
             _ -> ice)
-          CCX_expression_3 -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Qbit_expression_3 k -> CCX_expression'_3 k
+          CCX_expression_2 -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Qbit_expression_2 k -> CCX'_expression_2 k
             _ -> ice)
-          CCX_expression'_3 k -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Qbit_expression_3 l -> CCX_expression''_3 k l
+          CCX'_expression_2 k -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Qbit_expression_2 l -> CCX''_expression_2 k l
             _ -> ice)
-          CCX_expression''_3 k l -> Right (case j of
-            Crash_expression_3 -> (i, Crash_expression_3)
-            Qbit_expression_3 n -> (add_g i (CCX_gate k l n), j)
+          CCX''_expression_2 k l -> Right (case j of
+            Crash_expression_2 -> (i, Crash_expression_2)
+            Qbit_expression_2 n -> (add_g i (CCX_gate k l n), j)
             _ -> ice)
-          Construct_expression_3 -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Int_expression_3 k -> Construct_expression'_3 k
+          Construct_expression_2 -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Int_expression_2 k -> Construct'_expression_2 k
             _ -> ice)
-          Construct_expression'_3 k ->
+          Construct'_expression_2 k ->
             if k < 0 then
-              r (Algebraic_expression_3 "Nothing" [])
+              r nothing_algebraic
             else
-              second (\l -> Algebraic_expression_3 "Wrap" [Array_expression_3 k l]) <$> construct_array a i 0 k e
-          Crash_expression_3 -> m
-          Double_expression_3 k -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Qbit_expression_3 l -> Double_expression'_3 k l
+              second (\l -> wrap_algebraic (Array_expression_2 k l)) <$> construct_array a i 0 k e
+          Crash_expression_2 -> m
+          Double_expression_2 k -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Qbit_expression_2 l -> Double'_expression_2 k l
             _ -> ice)
-          Double_expression'_3 k l -> Right (case j of
-            Crash_expression_3 -> (i, Crash_expression_3)
-            Qbit_expression_3 n -> (add_g i (Double_gate k l n), j)
+          Double'_expression_2 k l -> Right (case j of
+            Crash_expression_2 -> (i, Crash_expression_2)
+            Qbit_expression_2 n -> (add_g i (Double_gate k l n), j)
             _ -> ice)
-          Equal_Int_expression_3 -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Int_expression_3 k -> Equal_Int_expression'_3 k
+          Equal_Int_expression_2 -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Int_expression_2 k -> Equal_Int'_expression_2 k
             _ -> ice)
-          Equal_Int_expression'_3 k -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Int_expression_3 l -> logical_algebraic (k == l)
+          Equal_Int'_expression_2 k -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Int_expression_2 l -> logical_algebraic (k == l)
             _ -> ice)
-          Field_expression_3 k -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Struct_expression_3 l -> unsafe_lookup k l
+          Field_expression_2 k -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Struct_expression_2 l -> unsafe_lookup k l
             _ -> ice)
-          Function_expression_3 k l n ->
-            let
-              o = case l of
-                Blank_pattern -> k
-                Name_pattern p -> (p, j) : k
-            in case n of
-              Function_expression_2 q s -> r (Function_expression_3 o q s)
-              _ -> circuit' (Prelude.foldl (flip (\(v, u) -> insert v (Right u))) a o) i n
-          Index_expression_3 -> r (case j of
-            Array_expression_3 k l -> Index_expression'_3 k l
-            Crash_expression_3 -> Crash_expression_3
+          Function_expression_2 k l -> circuit' a i (case k of
+            Blank_pattern -> l
+            Name_pattern n -> subst_expr n l j)
+          Index_expression_2 -> r (case j of
+            Array_expression_2 k l -> Index'_expression_2 k l
+            Crash_expression_2 -> Crash_expression_2
             _ -> ice)
-          Index_expression'_3 k l -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Int_expression_3 n ->
+          Index'_expression_2 k l -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Int_expression_2 n ->
               if n < 0 || n > k then nothing_algebraic else wrap_algebraic (l !! fromInteger n)
             _ -> ice)
-          Length_expression_3 -> r (case j of
-            Array_expression_3 k _ -> Int_expression_3 k
-            Crash_expression_3 -> Crash_expression_3
+          Length_expression_2 -> r (case j of
+            Array_expression_2 k _ -> Int_expression_2 k
+            Crash_expression_2 -> Crash_expression_2
             _ -> ice)
-          Less_Int_expression_3 -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Int_expression_3 k -> Less_Int_expression'_3 k
+          Less_Int_expression_2 -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Int_expression_2 k -> Less_Int'_expression_2 k
             _ -> ice)
-          Less_Int_expression'_3 k -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Int_expression_3 l -> logical_algebraic (k < l)
+          Less_Int'_expression_2 k -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Int_expression_2 l -> logical_algebraic (k < l)
             _ -> ice)
-          Measure_expression_3 -> case j of
-            Array_expression_3 k l ->
+          Measure_expression_2 -> case j of
+            Array_expression_2 k l ->
               let
                 (x, y) = add_creg k i
               in case measure x 0 y l of
-                Left n -> Right (n, Crash_expression_3)
-                Right n -> Right (n, Creg_expression_3 x)
-            Crash_expression_3 -> r Crash_expression_3
+                Left n -> Right (n, Crash_expression_2)
+                Right n -> Right (n, Creg_expression_2 x)
+            Crash_expression_2 -> r Crash_expression_2
             _ -> ice
-          Mod_Int_expression_3 -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Int_expression_3 k -> Mod_Int_expression'_3 k
+          Mod_Int_expression_2 -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Int_expression_2 k -> Mod_Int'_expression_2 k
             _ -> ice)
-          Mod_Int_expression'_3 k -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Int_expression_3 l -> Int_expression_3 (mod k (abs l))
+          Mod_Int'_expression_2 k -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Int_expression_2 l -> Int_expression_2 (mod k (abs l))
             _ -> ice)
-          Multiply_Int_expression_3 -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Int_expression_3 l -> Multiply_Int_expression'_3 l
+          Multiply_Int_expression_2 -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Int_expression_2 k -> Multiply_Int'_expression_2 k
             _ -> ice)
-          Multiply_Int_expression'_3 k -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Int_expression_3 n -> Int_expression_3 (k * n)
+          Multiply_Int'_expression_2 k -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Int_expression_2 l -> Int_expression_2 (k * l)
             _ -> ice)
-          Negate_Int_expression_3 -> r (case j of
-            Crash_expression_3 -> Crash_expression_3
-            Int_expression_3 k -> Int_expression_3 (- k)
+          Negate_Int_expression_2 -> r (case j of
+            Crash_expression_2 -> Crash_expression_2
+            Int_expression_2 k -> Int_expression_2 (- k)
             _ -> ice)
-          Single_expression_3 k -> Right (case j of
-            Crash_expression_3 -> (i, Crash_expression_3)
-            Qbit_expression_3 l -> (add_g i (Single_gate k l), j)
+          Single_expression_2 k -> Right (case j of
+            Crash_expression_2 -> (i, Crash_expression_2)
+            Qbit_expression_2 l -> (add_g i (Single_gate k l), j)
             _ -> ice)
-          Take_expression_3 -> eval_take b
+          Take_expression_2 -> case j of
+            Crash_expression_2 -> r Crash_expression_2
+            Struct_expression_2 _ -> eval_take i
+            _ -> ice
           _ -> ice
-      CCX_expression_2 -> f CCX_expression_3
-      Construct_expression_2 -> f Construct_expression_3
-      Crash_expression_2 -> m
-      Double_expression_2 d -> f (Double_expression_3 d)
-      Equal_Int_expression_2 -> f Equal_Int_expression_3
-      Field_expression_2 d -> f (Field_expression_3 d)
-      Function_expression_2 d e -> f (Function_expression_3 [] d e)
-      Index_expression_2 -> f Index_expression_3
-      Int_expression_2 d -> f (Int_expression_3 d)
-      Length_expression_2 -> f Length_expression_3
-      Less_Int_expression_2 -> f Less_Int_expression_3
       Match_expression_2 d e -> circuit' a b d >>= \(g, h) ->
         let
           n o = circuit' o g
           s = n a
         in case e of
           Matches_Algebraic_2 i j -> case h of
-            Algebraic_expression_3 k l -> case Data.Map.lookup k i of
+            Algebraic_expression_2 k l -> case Data.Map.lookup k i of
               Just (Match_Algebraic_2 o p) -> n (eval_match o l a) p
               Nothing -> case j of
                 Just o -> s o
                 Nothing -> ice
-            Crash_expression_3 -> m
+            Crash_expression_2 -> m
             _ -> ice
           Matches_Int_2 i j -> case h of
-            Crash_expression_3 -> m
-            Int_expression_3 k -> s (case Data.Map.lookup k i of
+            Crash_expression_2 -> m
+            Int_expression_2 k -> s (case Data.Map.lookup k i of
               Just o -> o
               Nothing -> j)
             _ -> ice
-      Measure_expression_2 -> f Measure_expression_3
-      Mod_Int_expression_2 -> f Mod_Int_expression_3
-      Multiply_Int_expression_2 -> f Multiply_Int_expression_3
-      Name_expression_2 d -> case unsafe_lookup d a of
-        Left g -> circuit' a b g
-        Right g -> f g
-      Negate_Int_expression_2 -> f Negate_Int_expression_3
-      Single_expression_2 d -> f (Single_expression_3 d)
-      Struct_expression_2 d -> second Struct_expression_3 <$> eval_struct a b d
-      Take_expression_2 -> f Take_expression_3
+      Name_expression_2 d -> circuit' a b (unsafe_lookup d a)
+      _ -> f c
   code_err :: String -> Err t
   code_err = Left <$> (++) "Code generation error. "
-  construct_array ::
-    Map' (Either Expression_2 Expression_3) -> Circuit -> Integer -> Integer -> Expression_2 -> Err (Circuit, [Expression_3])
+  construct_array :: Map' Expression_2 -> Circuit -> Integer -> Integer -> Expression_2 -> Err (Circuit, [Expression_2])
   construct_array d a i i_fin c =
     if i == i_fin then
       Right (a, [])
@@ -236,12 +177,7 @@ module Circuit where
       (
         circuit' d a (Application_expression_2 c (Int_expression_2 i)) >>=
         \(b, e) -> second ((:) e) <$> construct_array d b (i + 1) i_fin c)
-  eval_list :: Map' (Either Expression_2 Expression_3) -> Circuit -> [Expression_2] -> Err (Circuit, [Expression_3])
-  eval_list a b c = case c of
-    [] -> Right (b, [])
-    d : e -> circuit' a b d >>= \(f, g) -> second ((:) g) <$> eval_list a f e
-  eval_match ::
-    [Pattern_0] -> [Expression_3] -> Map' (Either Expression_2 Expression_3) -> Map' (Either Expression_2 Expression_3)
+  eval_match :: [Pattern_0] -> [Expression_2] -> Map' Expression_2 -> Map' Expression_2
   eval_match a b = case a of
     [] -> case b of
       [] -> id
@@ -250,24 +186,42 @@ module Circuit where
       [] -> ice
       f : g -> eval_match e g <$> (case d of
         Blank_pattern -> id
-        Name_pattern c -> insert c (Right f))
-  eval_struct :: Map' (Either Expression_2 Expression_3) -> Circuit -> Map' Expression_2 -> Err (Circuit, Map' Expression_3)
-  eval_struct a b c = case minViewWithKey c of
-    Just ((d, e), f) -> circuit' a b e >>= \(g, h) -> second (insert d h) <$> eval_struct a g f
-    Nothing -> Right (b, empty)
-  eval_take :: Circuit -> Err (Circuit, Expression_3)
-  eval_take (Circuit cc c q cg g) = Right (Circuit cc c (q + 1) cg g, Qbit_expression_3 q)
-  measure :: Integer -> Integer -> Circuit -> [Expression_3] -> Either Circuit Circuit
+        Name_pattern c -> insert c f)
+  eval_take :: Circuit -> Err (Circuit, Expression_2)
+  eval_take (Circuit cc c q cg g) = Right (Circuit cc c (q + 1) cg g, Qbit_expression_2 q)
+  measure :: Integer -> Integer -> Circuit -> [Expression_2] -> Either Circuit Circuit
   measure f g a b = case b of
     [] -> Right a
     c : d -> case c of
-      Crash_expression_3 -> Left a
-      Qbit_expression_3 e -> measure f (g + 1) (add_measure e f g a) d
+      Crash_expression_2 -> Left a
+      Qbit_expression_2 e -> measure f (g + 1) (add_measure e f g a) d
       _ -> ice
-  logical_algebraic :: Bool -> Expression_3
-  logical_algebraic a = Algebraic_expression_3 (show a) []
-  nothing_algebraic :: Expression_3
-  nothing_algebraic = Algebraic_expression_3 "Nothing" []
-  wrap_algebraic :: Expression_3 -> Expression_3
-  wrap_algebraic a = Algebraic_expression_3 "Wrap" [a]
+  logical_algebraic :: Bool -> Expression_2
+  logical_algebraic a = Algebraic_expression_2 (show a) []
+  nothing_algebraic :: Expression_2
+  nothing_algebraic = Algebraic_expression_2 "Nothing" []
+  subst_algebraic :: String -> Expression_2 -> Match_Algebraic_2 -> Match_Algebraic_2
+  subst_algebraic a b (Match_Algebraic_2 c d) = Match_Algebraic_2 c (subst_expr a d b)
+  subst_expr :: String -> Expression_2 -> Expression_2 -> Expression_2
+  subst_expr a b c =
+    let
+      f x = subst_expr a x c
+      f_list = (<$>) f
+      f_map = (<$>) f
+    in case b of
+      Algebraic_expression_2 d e -> Algebraic_expression_2 d (f_list e)
+      Application_expression_2 d e -> Application_expression_2 (f d) (f e)
+      Array_expression_2 d e -> Array_expression_2 d (f_list e)
+      Function_expression_2 d e -> case d of
+        Blank_pattern -> c
+        Name_pattern g -> if g == a then c else Function_expression_2 d (f e)
+      Index'_expression_2 d e -> Index'_expression_2 d (f_list e)
+      Match_expression_2 d e -> Match_expression_2 (f d) (case e of
+        Matches_Algebraic_2 g h -> Matches_Algebraic_2 (subst_algebraic a c <$> g) (f <$> h)
+        Matches_Int_2 g h -> Matches_Int_2 (f <$> g) (f h))
+      Name_expression_2 d -> if d == a then c else b
+      Struct_expression_2 d -> Struct_expression_2 (f_map d)
+      _ -> b
+  wrap_algebraic :: Expression_2 -> Expression_2
+  wrap_algebraic a = Algebraic_expression_2 "Wrap" [a]
 -----------------------------------------------------------------------------------------------------------------------------

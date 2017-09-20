@@ -55,25 +55,38 @@ module Typing where
   type Defs = Map' Expression_2
   data Expression_2 =
     Add_Int_expression_2 |
+    Add_Int'_expression_2 Integer |
     Algebraic_expression_2 String [Expression_2] |
     Application_expression_2 Expression_2 Expression_2 |
+    Array_expression_2 Integer [Expression_2] |
     CCX_expression_2 |
+    CCX'_expression_2 Integer |
+    CCX''_expression_2 Integer Integer |
     Construct_expression_2 |
+    Construct'_expression_2 Integer |
     Crash_expression_2 |
+    Creg_expression_2 Integer |
     Double_expression_2 String |
+    Double'_expression_2 String Integer |
     Equal_Int_expression_2 |
+    Equal_Int'_expression_2 Integer |
     Field_expression_2 String |
     Function_expression_2 Pattern_0 Expression_2 |
     Index_expression_2 |
+    Index'_expression_2 Integer [Expression_2] |
     Int_expression_2 Integer |
     Length_expression_2 |
     Less_Int_expression_2 |
+    Less_Int'_expression_2 Integer |
     Match_expression_2 Expression_2 Matches_2 |
     Measure_expression_2 |
     Mod_Int_expression_2 |
+    Mod_Int'_expression_2 Integer |
     Multiply_Int_expression_2 |
+    Multiply_Int'_expression_2 Integer |
     Name_expression_2 String |
     Negate_Int_expression_2 |
+    Qbit_expression_2 Integer |
     Single_expression_2 String |
     Struct_expression_2 (Map' Expression_2) |
     Take_expression_2
