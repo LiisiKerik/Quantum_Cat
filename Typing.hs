@@ -7,8 +7,7 @@ make match work with negative ints (modify parser)
 check whether kinds of everything are ok (ending with a star) - potential failure to catch very stupid bugs
 addition of qnums. test it
 protection against duplicate file loading - what happens now? if crashes - fix, give a nice error/warning. if nothing - warn?
-implement all necessary operations for ints and bools
-get random number generation example to work
+implement all necessary operations for ints and bools (both classical and quantum)
 graph examples
 foldm for log-depth array aggregation - probably necessary for more efficient circuits
 tests
@@ -39,6 +38,7 @@ generalise if gate to work on different kinds of structs, not only on cregs?
 change how crash works? wrap expr_3 in maybe, make constructors give crash as a result when they get crash as argument?
 prettier result code by letting user define composite gates which will be printed as subroutine in end code?
 there's too much safety now? wrapping all array operations in maybe seems silly. make wrong indexation etc crash instead?
+rename bool type into "Bit" for nice symmetry between classical and quantum types?
 -}
 -----------------------------------------------------------------------------------------------------------------------------
 {-# OPTIONS_GHC -Wall #-}
