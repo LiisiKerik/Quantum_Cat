@@ -1,5 +1,6 @@
 `````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````
 Algebraic Either[A : *, B : *](Left(A), Right(B))
+Algebraic List[A : *](Cons(A, List A), Empty)
 Struct Pair[A : *, B : *](First : A, Second : B)
 Def Add_Array[A : *](Add_A : Function A (Function A A), x : Array A, y : Array A) : Maybe (Array A) = Zip_Array Add_A x y
 Def Add_Logical(x : Logical, y : Logical) : Logical = Match x {

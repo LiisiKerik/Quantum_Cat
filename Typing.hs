@@ -27,6 +27,8 @@ internal: do something with old/new status tags. check where exactly they're nec
 internal: with new matching error system, do we need to keep locations for each match? if not, modify parser/namer to remove
 change semantics of missing pattern-match variables from blank to lambda? (Left -> e is not Left _ -> e but Left x -> e x)
 internal: make the system of specifying built-in algebraic data types and things better and safer
+"Algebraic List[A : *](Cons(A, List A), Empty)" -> "Algebraic List[A : *](Cons A (List A), Empty)"
+Allow hiding things to functions outside module - so that helper functions are not exported from the module
 OF QUESTIONABLE USEFULNESS
 internal: do something with the internal representation of arrays to reduce lookup complexity?
 allow more than 1-dimensional cbit arrays (and also single cbits) as outputs?
