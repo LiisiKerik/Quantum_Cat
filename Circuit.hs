@@ -1,3 +1,63 @@
+{-
+    If_gate'' t _ ->
+      if qtype t then
+        func_val
+          circ
+          (pure_func
+            (\(Creg_pointer x) ->
+              pure_func
+                (\(Int_val y) -> -- TODO: CHECK WHETHER VALUE OF Y IS IN A SUITABLE RANGE, RETURN ERROR MSG WITH LEFT OTHERWISE
+                  pure_func
+                    (\(Func_val f) ->
+                    \(circ' @ (Circuit cc' c' q' cg' g')) ->
+                    \z ->
+                      f d circ' z >>=
+                      \(Circuit _ c'' q'' cg'' g'', z') ->
+                        if c'' == c' && q'' == q' && z' == z then
+                          (\(sub_gates, tagged_qbits) ->
+                            let
+                              (inps, arg_num) = gate_map tagged_qbits 0 0
+                            in
+                              (
+                                Circuit
+                                  cc'
+                                  c'
+                                  q'
+                                  (cg' + 1)
+                                  (If_g x y arg_num (transf_gate' (circ_lookup inps) <$> sub_gates) (fst <$> inps) : g'),
+                                z)) <$>
+                          tag_qbits (take (fromInteger (cg'' - cg')) g'') (replicate (fromInteger q') False)
+                        else
+                          Left
+                            ("Code generation error. The function fed to If_gate is not allowed to " ++
+                            "allocate qbits, make measurements, include conditionals, " ++
+                            "or change the intermediate result pointer.")))))
+      else
+        Left "Type error. If_gate can only be applied to quantum types."
+  gate_map :: [Bool] -> Integer -> Integer -> ([(Integer, Integer)], Integer)
+  gate_map b x y = case b of
+    [] -> ([], 0)
+    h : t -> let
+      f = gate_map t (x + 1) in
+        if h then bimap ((x, y) :) (+ 1) (f (y + 1)) else f y
+  qtype :: Type -> Bool
+  qtype t = case t of
+    Arr u _ -> qtype u
+    Qbit -> True
+    Struct_type _ u _ _ -> and (qtype <$> u)
+    _ -> False
+  tag_qbits :: [Gate] -> [Bool] -> Either String ([Gate'], [Bool]) -- TODO: REFACTORISE, REMOVE REPEATED CODE
+  tag_qbits g b = case g of
+    [] -> Right ([], b)
+    h : t -> let
+      t' = tag_qbits t in
+        case h of
+          G' g' -> first (g' :) <$> (case g' of
+            Double_g _ x y -> t' (comp_all (update_q <$> [x, y]) b)
+            Single_g _ x -> t' (update_q x b)
+            Toffoli_g x y z -> t' (comp_all (update_q <$> [x, y, z]) b))
+          _ -> Left "Code generation error. Tried to put a non-unitary gate into a subroutine."
+-}
 -----------------------------------------------------------------------------------------------------------------------------
 {-# OPTIONS_GHC -Wall #-}
 module Circuit where
@@ -148,12 +208,11 @@ module Circuit where
           _ -> ice
       Match_expression_2 d e -> circuit' a b d >>= \(g, h) ->
         let
-          n o = circuit' o g
-          s = n a
+          s = circuit' a g
         in case e of
           Matches_Algebraic_2 i j -> case h of
             Algebraic_expression_2 k l -> case Data.Map.lookup k i of
-              Just (Match_Algebraic_2 o p) -> n (eval_match o l a) p
+              Just (Match_Algebraic_2 o p) -> s (eval_match o l p)
               Nothing -> case j of
                 Just o -> s o
                 Nothing -> ice
@@ -177,6 +236,7 @@ module Circuit where
       (
         circuit' d a (Application_expression_2 c (Int_expression_2 i)) >>=
         \(b, e) -> second ((:) e) <$> construct_array d b (i + 1) i_fin c)
+{-
   eval_match :: [Pattern_0] -> [Expression_2] -> Map' Expression_2 -> Map' Expression_2
   eval_match a b = case a of
     [] -> case b of
@@ -187,6 +247,17 @@ module Circuit where
       f : g -> eval_match e g <$> (case d of
         Blank_pattern -> id
         Name_pattern c -> insert c f)
+-}
+  eval_match :: [Pattern_0] -> [Expression_2] -> Expression_2 -> Expression_2
+  eval_match a b c = case a of
+    [] -> case b of
+      [] -> c
+      _ -> ice
+    d : e -> case b of
+      [] -> ice
+      f : g -> eval_match e g (case d of
+        Blank_pattern -> c
+        Name_pattern h -> subst_expr h c f)
   eval_take :: Circuit -> Err (Circuit, Expression_2)
   eval_take (Circuit cc c q cg g) = Right (Circuit cc c (q + 1) cg g, Qbit_expression_2 q)
   measure :: Integer -> Integer -> Circuit -> [Expression_2] -> Either Circuit Circuit
@@ -201,13 +272,12 @@ module Circuit where
   nothing_algebraic :: Expression_2
   nothing_algebraic = Algebraic_expression_2 "Nothing" []
   subst_algebraic :: String -> Expression_2 -> Match_Algebraic_2 -> Match_Algebraic_2
-  subst_algebraic a b (Match_Algebraic_2 c d) = Match_Algebraic_2 c (subst_expr a d b)
+  subst_algebraic a b (Match_Algebraic_2 c d) = Match_Algebraic_2 c (if subst_help c a then d else subst_expr a d b)
   subst_expr :: String -> Expression_2 -> Expression_2 -> Expression_2
   subst_expr a b c =
     let
       f x = subst_expr a x c
       f_list = (<$>) f
-      f_map = (<$>) f
     in case b of
       Algebraic_expression_2 d e -> Algebraic_expression_2 d (f_list e)
       Application_expression_2 d e -> Application_expression_2 (f d) (f e)
@@ -220,8 +290,17 @@ module Circuit where
         Matches_Algebraic_2 g h -> Matches_Algebraic_2 (subst_algebraic a c <$> g) (f <$> h)
         Matches_Int_2 g h -> Matches_Int_2 (f <$> g) (f h))
       Name_expression_2 d -> if d == a then c else b
-      Struct_expression_2 d -> Struct_expression_2 (f_map d)
+      Struct_expression_2 d -> Struct_expression_2 (f <$> d)
       _ -> b
+  subst_help :: [Pattern_0] -> String -> Bool
+  subst_help a b = case a of 
+    [] -> False
+    c : d ->
+      let
+        f = subst_help d b
+      in case c of
+        Blank_pattern -> f
+        Name_pattern e -> e == b || f
   wrap_algebraic :: Expression_2 -> Expression_2
   wrap_algebraic a = Algebraic_expression_2 "Wrap" [a]
 -----------------------------------------------------------------------------------------------------------------------------
